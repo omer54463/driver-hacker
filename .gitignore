@@ -1,0 +1,9 @@
+.venv/
+*.egg-info/
+
+.mypy_cache/
+.ruff_cache/
+
+.vscode/
+
+working-directory/
