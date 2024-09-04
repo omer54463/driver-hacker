@@ -1,9 +1,10 @@
 from collections.abc import Sequence
 from itertools import chain, count
-from json import load
 from pathlib import Path
 from re import compile
 from typing import cast
+
+from yaml import safe_load
 
 from driver_hacker.decoder.instruction import Instruction
 from driver_hacker.ida.ida import Ida
@@ -15,7 +16,7 @@ class Decoder:
     __COLOR_PATTERN = compile(r"(\x01|\x02).")
     __BRACKETS_PATTERN = compile(r"[^\[\]]*\[(.*)\]")
     __BRACKETS_CONTENT_PATTERN = compile(r"[+-][^+-]+")
-    __REGISTER_NAMES = load((Path(__file__).parent / "registers.json").open())
+    __REGISTER_NAMES = safe_load((Path(__file__).parent / "registers.yaml").read_text())
 
     def __init__(self, ida: Ida) -> None:
         self.__ida = ida
