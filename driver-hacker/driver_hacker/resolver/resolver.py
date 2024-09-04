@@ -15,8 +15,6 @@ class Resolver:
     __ida: Ida
     __imports: dict[str, int]
 
-    __DEFAULT_ARGUMENT_COUNT = 0x10
-    __REGISTER_ARGUMENT_OPERANDS = ("rcx", "rdx", "r8", "r9")
     __FUNCTION_ARGUMENT_COUNTS: dict[str, int] = safe_load(
         (Path(__file__).parent / "function_argument_counts.yaml").read_text()
     )
@@ -49,7 +47,11 @@ class Resolver:
         if function_name is None:
             return None
 
-        return Function(address, function_name, self.__get_function_arguments(function_name))
+        argument_count = self.__FUNCTION_ARGUMENT_COUNTS.get(
+            function_name.removeprefix(self.__FUNCTION_IMPORT_PREFIX)
+        )
+
+        return Function(address, function_name, argument_count)
 
     def resolve_imports(self, names: Iterable[str]) -> Sequence[int]:
         return [self.__imports[name] for name in names]
@@ -142,19 +144,3 @@ class Resolver:
             )
 
         return result
-
-    def __get_function_arguments(self, function_name: str) -> Sequence[str]:
-        argument_count = self.__FUNCTION_ARGUMENT_COUNTS.get(
-            function_name.removeprefix(self.__FUNCTION_IMPORT_PREFIX),
-            self.__DEFAULT_ARGUMENT_COUNT,
-        )
-
-        register_argument_count = min(argument_count, 4)
-        register_argument_operands = self.__REGISTER_ARGUMENT_OPERANDS[:register_argument_count]
-
-        stack_argument_count = max(argument_count - register_argument_count, 0)
-        stack_argument_operands = tuple(
-            f"[rsp+{0x20 + 8 * index:#x}]" for index in range(stack_argument_count)
-        )
-
-        return register_argument_operands + stack_argument_operands

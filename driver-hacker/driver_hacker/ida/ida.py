@@ -106,7 +106,7 @@ class Ida:
             return self.__binary
 
         message = "Binary was not provided"
-        raise ValueError(message)
+        raise RuntimeError(message)
 
     @property
     def database(self) -> Path:

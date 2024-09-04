@@ -1,15 +1,16 @@
-from collections.abc import Iterable, Iterator, Sequence
+from typing import final
 
 
+@final
 class Function:
     __address: int
     __name: str
-    __arguments: tuple[str, ...]
+    __argument_count: int | None
 
-    def __init__(self, address: int, name: str, arguments: Iterable[str]) -> None:
+    def __init__(self, address: int, name: str, argument_count: int | None) -> None:
         self.__address = address
         self.__name = name
-        self.__arguments = tuple(arguments)
+        self.__argument_count = argument_count
 
     @property
     def address(self) -> int:
@@ -20,31 +21,19 @@ class Function:
         return self.__name
 
     @property
-    def argument_count(self) -> int:
-        return len(self.__arguments)
-
-    @property
-    def arguments(self) -> Sequence[str]:
-        return self.__arguments
-
-    def get_argument(self, index: int) -> str:
-        return self.__arguments[index]
-
-    def __len__(self) -> int:
-        return len(self.__arguments)
-
-    def __contains__(self, argument: str) -> bool:
-        return argument in self.__arguments
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.__arguments)
+    def argument_count(self) -> int | None:
+        return self.__argument_count
 
     def __repr__(self) -> str:
-        parts = (f"{self.__address:#x}", f"{self.__name!r}", f"{self.__arguments!r}")
+        parts = (
+            f"{self.__address:#x}",
+            f"{self.__name!r}",
+            f"{None!r}" if self.__argument_count is None else f"{self.__argument_count:#x}",
+        )
         return f"{type(self).__name__}({', '.join(parts)})"
 
     def __str__(self) -> str:
         return repr(self)
 
-    def __match_args__(self) -> tuple[int, str, Sequence[str]]:
-        return (self.__address, self.__name, self.__arguments)
+    def __match_args__(self) -> tuple[int, str, int | None]:
+        return (self.__address, self.__name, self.__argument_count)

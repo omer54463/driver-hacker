@@ -1,33 +1,39 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, Any, Self, final
+
+from driver_hacker.follower.follow_leaf import FollowLeaf
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from collections.abc import Set as AbstractSet
 
+    from driver_hacker.decoder.operand import Operand
     from driver_hacker.follower.follow_direction import FollowDirection
+    from driver_hacker.follower.follow_leaf_type import FollowLeafType
 
 
 @final
 class FollowNode:
     __address: int
-    __operand: int | str
+    __operand: Operand
     __direction: FollowDirection
     __sub_nodes: set[Self]
+    __leafs: set[FollowLeaf]
 
-    def __init__(self, address: int, operand: int | str, direction: FollowDirection) -> None:
+    def __init__(self, address: int, operand: Operand, direction: FollowDirection) -> None:
         self.__address = address
         self.__operand = operand
         self.__direction = direction
         self.__sub_nodes = set()
+        self.__leafs = set()
 
     @property
     def address(self) -> int:
         return self.__address
 
     @property
-    def operand(self) -> int | str:
+    def operand(self) -> Operand:
         return self.__operand
 
     @property
@@ -42,12 +48,29 @@ class FollowNode:
     def sub_nodes(self) -> AbstractSet[Self]:
         return self.__sub_nodes
 
-    def new(self, address: int, operand: int | str, direction: FollowDirection) -> Self:
+    @property
+    def leaf_count(self) -> int:
+        return len(self.__leafs)
+
+    @property
+    def leafs(self) -> AbstractSet[FollowLeaf]:
+        return self.__leafs
+
+    def new(self, address: int, operand: Operand, direction: FollowDirection) -> Self:
         self.__sub_nodes.add(node := type(self)(address, operand, direction))
         return node
 
-    def add(self, node: Self) -> None:
-        self.__sub_nodes.add(node)
+    def new_leaf(self, address: int, type: FollowLeafType, value: Any) -> FollowLeaf:
+        self.__leafs.add(leaf := FollowLeaf(address, type, value))
+        return leaf
+
+    def add(self, node_or_leaf: Self | FollowLeaf) -> None:
+        match node_or_leaf:
+            case FollowLeaf() as leaf:
+                self.__leafs.add(leaf)
+
+            case node:
+                self.__sub_nodes.add(node)
 
     def __len__(self) -> int:
         return len(self.__sub_nodes)
@@ -59,7 +82,7 @@ class FollowNode:
         return iter(self.__sub_nodes)
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, FollowNode):
+        if isinstance(other, type(self)):
             return self.__key() == other.__key()
 
         return NotImplemented
@@ -68,21 +91,14 @@ class FollowNode:
         return hash(self.__key())
 
     def __repr__(self) -> str:
-        match self.__operand:
-            case str():
-                operand_part = f"{self.__operand!r}"
-
-            case int():
-                operand_part = f"{self.__operand:#x}"
-
-        parts = (f"{self.__address:#x}", operand_part, f"{self.__direction}")
+        parts = (f"{self.__address:#x}", f"{self.__operand!r}", f"{self.__direction}")
         return f"{type(self).__name__}({', '.join(parts)})"
 
     def __str__(self) -> str:
         return repr(self)
 
-    def __match_args__(self) -> tuple[int, int | str, FollowDirection, AbstractSet[Self]]:
+    def __match_args__(self) -> tuple[int, Operand, FollowDirection, AbstractSet[Self]]:
         return *self.__key(), self.sub_nodes
 
-    def __key(self) -> tuple[int, int | str, FollowDirection]:
+    def __key(self) -> tuple[int, Operand, FollowDirection]:
         return self.__address, self.__operand, self.__direction

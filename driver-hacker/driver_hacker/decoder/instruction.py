@@ -1,5 +1,25 @@
 from collections.abc import Iterable, Iterator, Sequence
-from typing import final, overload
+from typing import TypeVar, final, overload
+
+from driver_hacker.decoder.data_operand import DataOperand
+from driver_hacker.decoder.displacement_operand import DisplacementOperand
+from driver_hacker.decoder.far_code_operand import FarCodeOperand
+from driver_hacker.decoder.immediate_operand import ImmediateOperand
+from driver_hacker.decoder.near_code_operand import NearCodeOperand
+from driver_hacker.decoder.operand import Operand
+from driver_hacker.decoder.phrase_operand import PhraseOperand
+from driver_hacker.decoder.register_operand import RegisterOperand
+
+OperandType = TypeVar(
+    "OperandType",
+    RegisterOperand,
+    DataOperand,
+    PhraseOperand,
+    DisplacementOperand,
+    ImmediateOperand,
+    FarCodeOperand,
+    NearCodeOperand,
+)
 
 
 @final
@@ -8,7 +28,7 @@ class Instruction:
     __address: int
     __following_address: int | None
     __mnemonic: str
-    __operands: tuple[int | str, ...]
+    __operands: tuple[Operand, ...]
 
     def __init__(
         self,
@@ -16,7 +36,7 @@ class Instruction:
         address: int,
         following_address: int | None,
         mnemonic: str,
-        operands: Iterable[int | str],
+        operands: Iterable[Operand],
     ) -> None:
         self.__previous_address = previous_address
         self.__address = address
@@ -45,21 +65,20 @@ class Instruction:
         return len(self.__operands)
 
     @property
-    def operands(self) -> Sequence[int | str]:
+    def operands(self) -> Sequence[Operand]:
         return self.__operands
 
     @overload
-    def get_operand(self, index: int) -> int | str: ...
+    def get_operand(self, index: int) -> Operand: ...
 
     @overload
-    def get_operand(self, index: int, operand_type: type[int]) -> int: ...
-
-    @overload
-    def get_operand(self, index: int, operand_type: type[str]) -> str: ...
+    def get_operand(self, index: int, operand_type: type[OperandType]) -> OperandType: ...
 
     def get_operand(
-        self, index: int, operand_type: type[str] | type[int] | None = None
-    ) -> int | str:
+        self,
+        index: int,
+        operand_type: type[OperandType] | None = None,
+    ) -> Operand | OperandType:
         operand = self.__operands[index]
 
         if operand_type is None or isinstance(operand, operand_type):
@@ -71,10 +90,10 @@ class Instruction:
     def __len__(self) -> int:
         return len(self.__operands)
 
-    def __contains__(self, operand: int | str) -> bool:
+    def __contains__(self, operand: Operand) -> bool:
         return operand in self.__operands
 
-    def __iter__(self) -> Iterator[int | str]:
+    def __iter__(self) -> Iterator[Operand]:
         return iter(self.__operands)
 
     def __repr__(self) -> str:
@@ -102,5 +121,5 @@ class Instruction:
     def __str__(self) -> str:
         return repr(self)
 
-    def __match_args__(self) -> tuple[int | str, ...]:
-        return (self.__mnemonic, *self.__operands)
+    def __match_args__(self) -> tuple[str, Sequence[Operand]]:
+        return (self.__mnemonic, self.__operands)

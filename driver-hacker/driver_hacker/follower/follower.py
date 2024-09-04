@@ -1,12 +1,18 @@
 from collections.abc import Generator, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, assert_never, cast
 
+from driver_hacker.decoder.data_operand import DataOperand
 from driver_hacker.decoder.decoder import Decoder
+from driver_hacker.decoder.displacement_operand import DisplacementOperand
 from driver_hacker.decoder.instruction import Instruction
+from driver_hacker.decoder.operand import Operand
+from driver_hacker.decoder.register_operand import RegisterOperand
 from driver_hacker.follower.follow_direction import FollowDirection
+from driver_hacker.follower.follow_leaf_type import FollowLeafType
 from driver_hacker.follower.follow_node import FollowNode
 from driver_hacker.follower.follow_tree import FollowTree
 from driver_hacker.ida.ida import Ida
+from driver_hacker.resolver.function import Function
 from driver_hacker.resolver.resolver import Resolver
 
 if TYPE_CHECKING:
@@ -16,6 +22,14 @@ if TYPE_CHECKING:
 class Follower:
     __ida: Ida
 
+    __DEFAULT_ARGUMENT_COUNT = 0x10
+    __ARGUMENT_OPERANDS = (
+        RegisterOperand("rcx"),
+        RegisterOperand("rdx"),
+        RegisterOperand("r8"),
+        RegisterOperand("r9"),
+    )
+    __RETURN_VALUE_OPERANDS = (RegisterOperand("rax"),)
     __MOV_MNEMONICS = ("mov", "movdqu", "movups", "lea")
 
     def __init__(self, ida: Ida) -> None:
@@ -23,7 +37,7 @@ class Follower:
         self.__resolver = Resolver(ida)
         self.__decoder = Decoder(ida)
 
-    def follow(self, address: int, operand: str, direction: FollowDirection) -> FollowTree:
+    def follow(self, address: int, operand: Operand, direction: FollowDirection) -> FollowTree:
         tree = FollowTree(FollowNode(address, operand, direction))
 
         queue = [(tree.root, self.__get_block(tree.root.address))]
@@ -41,18 +55,14 @@ class Follower:
                     if (node, next_block.start_ea) not in visited
                 )
 
-            queue.extend(
-                (new_node, block)
-                for new_node in new_nodes
-                if new_node.direction != FollowDirection.STOP
-            )
+            queue.extend((new_node, block) for new_node in new_nodes)
 
         return tree
 
-    def follow_backwards(self, address: int, operand: str) -> FollowTree:
+    def follow_backwards(self, address: int, operand: Operand) -> FollowTree:
         return self.follow(address, operand, FollowDirection.BACKWARDS)
 
-    def follow_forwards(self, address: int, operand: str) -> FollowTree:
+    def follow_forwards(self, address: int, operand: Operand) -> FollowTree:
         return self.follow(address, operand, FollowDirection.FORWARDS)
 
     def __get_block(self, address: int) -> "ida_gdl.BasicBlock":
@@ -63,8 +73,8 @@ class Follower:
             if block.start_ea <= address <= block.end_ea:
                 return block
 
-        message = f"Block was not found for address `{address:#x}`"
-        raise ValueError(message)
+        message = f"Block was not found for `{address:#x}`"
+        raise RuntimeError(message)
 
     def __follow_node(
         self,
@@ -80,14 +90,12 @@ class Follower:
         instruction: Instruction | None = self.__decoder.decode_instruction(address)
         new_nodes: list[FollowNode] = []
         while instruction := self.__next_instruction(instruction, block, node.direction):
-            new_node, is_primary = self.__process_instruction(instruction, node)
+            new_node, node_exhausted = self.__process_instruction(instruction, node)
 
-            if new_node is None:
-                continue
+            if new_node is not None:
+                new_nodes.append(new_node)
 
-            new_nodes.append(new_node)
-
-            if is_primary:
+            if node_exhausted:
                 return new_nodes, True
 
         return new_nodes, False
@@ -104,9 +112,8 @@ class Follower:
             case FollowDirection.FORWARDS:
                 return cast(Generator["ida_gdl.BasicBlock"], block.succs())
 
-            case direction:
-                message = f"Unexpected direction `{direction}`"
-                raise RuntimeError(message)
+            case never:
+                assert_never(never)
 
     def __default_address(self, block: "ida_gdl.BasicBlock", direction: FollowDirection) -> int:
         match direction:
@@ -116,9 +123,8 @@ class Follower:
             case FollowDirection.FORWARDS:
                 return cast(int, block.start_ea)
 
-            case direction:
-                message = f"Unexpected direction `{direction}`"
-                raise RuntimeError(message)
+            case never:
+                assert_never(never)
 
     def __next_instruction(
         self,
@@ -148,9 +154,8 @@ class Follower:
 
                 return None
 
-            case direction:
-                message = f"Unexpected direction `{direction}`"
-                raise RuntimeError(message)
+            case never:
+                assert_never(never)
 
     def __process_instruction(
         self,
@@ -164,9 +169,8 @@ class Follower:
             case FollowDirection.FORWARDS:
                 return self.__process_instruction_forwards(instruction, node)
 
-            case direction:
-                message = f"Unexpected direction `{direction}`"
-                raise RuntimeError(message)
+            case never:
+                assert_never(never)
 
     def __process_instruction_backwards(
         self,
@@ -186,6 +190,12 @@ class Follower:
                 )
                 return new_node, False
 
+            if instruction.mnemonic == "call" and node.operand in self.__RETURN_VALUE_OPERANDS:
+                address = instruction.get_operand(0, DataOperand).address
+                function = self.__resolver.resolve_function(address)
+                node.new_leaf(instruction.address, FollowLeafType.FUNCTION_CALL, function)
+                return None, True
+
         return None, False
 
     def __process_instruction_forwards(
@@ -198,11 +208,31 @@ class Follower:
         ):
             return node.new(instruction.address, instruction.get_operand(0), node.direction), True
 
-        if instruction.mnemonic == ("call"):
-            function_address = instruction.get_operand(0, int)
-            function = self.__resolver.resolve_function(function_address)
-
-            if node.operand in function.arguments:
-                return node.new(instruction.address, function.name, FollowDirection.STOP), True
+        if instruction.mnemonic == "call":
+            address = instruction.get_operand(0, DataOperand).address
+            function = self.__resolver.resolve_function(address)
+            if node.operand in self.__get_function_arguments(function):
+                node.new_leaf(instruction.address, FollowLeafType.FUNCTION_CALL, function)
+                return None, True
 
         return None, False
+
+    def __get_function_arguments(self, function: Function) -> Sequence[Operand]:
+        argument_count = (
+            self.__DEFAULT_ARGUMENT_COUNT
+            if function.argument_count is None
+            else function.argument_count
+        )
+
+        register_argument_count = min(argument_count, 4)
+        register_argument_operands = tuple(
+            register for register in self.__ARGUMENT_OPERANDS[:register_argument_count]
+        )
+
+        stack_argument_count = max(argument_count - register_argument_count, 0)
+        stack_argument_operands = tuple(
+            DisplacementOperand("rsp", None, 1, 0x20 + 8 * index)
+            for index in range(stack_argument_count)
+        )
+
+        return register_argument_operands + stack_argument_operands

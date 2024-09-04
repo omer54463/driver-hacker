@@ -6,6 +6,7 @@ from typing import final
 
 from loguru import logger
 
+from driver_hacker.decoder.register_operand import RegisterOperand
 from driver_hacker.follower.follow_node import FollowNode
 from driver_hacker.follower.follower import Follower
 from driver_hacker.get_system_modules import get_system_modules
@@ -44,9 +45,13 @@ def parse_arguments() -> Arguments:
 
 
 def display_follow_nodes(node: FollowNode, level: int = 0) -> None:
-    logger.info("{} > {}", " " * level * 2, node)
+    logger.info("{} - {}", " " * level * 2, node)
+
     for sub_node in node:
         display_follow_nodes(sub_node, level + 1)
+
+    for leaf in node.leafs:
+        logger.info("{} - {}", " " * (level + 1) * 2, leaf)
 
 
 def analyze(ida: Ida) -> None:
@@ -57,7 +62,7 @@ def analyze(ida: Ida) -> None:
     follower = Follower(ida)
     for reference in resolver.resolve_references_to(io_create_device, ReferenceType.FLOW):
         logger.info("IoCreateDevice reference: {:#x}", reference)
-        tree = follower.follow_backwards(reference, "r8")
+        tree = follower.follow_backwards(reference, RegisterOperand("r8"))
         display_follow_nodes(tree.root)
 
 

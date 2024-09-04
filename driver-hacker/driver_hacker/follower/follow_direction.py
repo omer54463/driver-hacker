@@ -8,7 +8,6 @@ from typing import final
 class FollowDirection(Enum):
     FORWARDS = auto()
     BACKWARDS = auto()
-    STOP = auto()
 
     def opposite(self) -> FollowDirection:
         match self:
@@ -17,6 +16,3 @@ class FollowDirection(Enum):
 
             case FollowDirection.FORWARDS:
                 return FollowDirection.BACKWARDS
-
-            case FollowDirection.STOP:
-                return FollowDirection.STOP
