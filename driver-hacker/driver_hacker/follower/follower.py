@@ -1,8 +1,6 @@
 from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING, cast
 
-from loguru import logger
-
 from driver_hacker.decoder.decoder import Decoder
 from driver_hacker.decoder.instruction import Instruction
 from driver_hacker.follower.follow_direction import FollowDirection
@@ -17,6 +15,8 @@ if TYPE_CHECKING:
 
 class Follower:
     __ida: Ida
+
+    __MOV_MNEMONICS = ("mov", "movdqu", "movups", "lea")
 
     def __init__(self, ida: Ida) -> None:
         self.__ida = ida
@@ -44,7 +44,7 @@ class Follower:
             queue.extend(
                 (new_node, block)
                 for new_node in new_nodes
-                if new_node.direction != FollowDirection.TERMINAL
+                if new_node.direction != FollowDirection.STOP
             )
 
         return tree
@@ -173,7 +173,7 @@ class Follower:
         instruction: Instruction,
         node: FollowNode,
     ) -> tuple[FollowNode | None, bool]:
-        if instruction.mnemonic in ("mov", "lea"):
+        if instruction.mnemonic in self.__MOV_MNEMONICS:
             if node.operand == instruction.get_operand(0):
                 new_node = node.new(instruction.address, instruction.get_operand(1), node.direction)
                 return new_node, True
@@ -193,22 +193,16 @@ class Follower:
         instruction: Instruction,
         node: FollowNode,
     ) -> tuple[FollowNode | None, bool]:
-        if instruction.mnemonic in ("mov", "lea") and node.operand == instruction.get_operand(1):
+        if instruction.mnemonic in self.__MOV_MNEMONICS and node.operand == instruction.get_operand(
+            1
+        ):
             return node.new(instruction.address, instruction.get_operand(0), node.direction), True
 
         if instruction.mnemonic == ("call"):
-            insn = self.__ida.ua.insn_t()
-            self.__ida.ua.decode_insn(insn, instruction.address)
-            op = insn.ops[0]
+            function_address = instruction.get_operand(0, int)
+            function = self.__resolver.resolve_function(function_address)
 
-            function = self.__resolver.resolve_name(op.addr)
-            logger.info("function {}", function)
-
-            if node.operand in ("rcx", "rdx", "r8", "r9"):
-                return node.new(
-                    instruction.address,
-                    node.operand,
-                    FollowDirection.TERMINAL,
-                ), True
+            if node.operand in function.arguments:
+                return node.new(instruction.address, function.name, FollowDirection.STOP), True
 
         return None, False

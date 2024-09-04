@@ -12,11 +12,11 @@ if TYPE_CHECKING:
 @final
 class FollowNode:
     __address: int
-    __operand: str
+    __operand: int | str
     __direction: FollowDirection
     __sub_nodes: set[Self]
 
-    def __init__(self, address: int, operand: str, direction: FollowDirection) -> None:
+    def __init__(self, address: int, operand: int | str, direction: FollowDirection) -> None:
         self.__address = address
         self.__operand = operand
         self.__direction = direction
@@ -27,7 +27,7 @@ class FollowNode:
         return self.__address
 
     @property
-    def operand(self) -> str:
+    def operand(self) -> int | str:
         return self.__operand
 
     @property
@@ -42,7 +42,7 @@ class FollowNode:
     def sub_nodes(self) -> AbstractSet[Self]:
         return self.__sub_nodes
 
-    def new(self, address: int, operand: str, direction: FollowDirection) -> Self:
+    def new(self, address: int, operand: int | str, direction: FollowDirection) -> Self:
         self.__sub_nodes.add(node := type(self)(address, operand, direction))
         return node
 
@@ -68,18 +68,21 @@ class FollowNode:
         return hash(self.__key())
 
     def __repr__(self) -> str:
-        parts = (
-            f"{self.__address:#x}",
-            f"{self.__operand!r}",
-            f"{self.__direction}",
-        )
+        match self.__operand:
+            case str():
+                operand_part = f"{self.__operand!r}"
+
+            case int():
+                operand_part = f"{self.__operand:#x}"
+
+        parts = (f"{self.__address:#x}", operand_part, f"{self.__direction}")
         return f"{type(self).__name__}({', '.join(parts)})"
 
     def __str__(self) -> str:
         return repr(self)
 
-    def __match_args__(self) -> tuple[int, str, FollowDirection, AbstractSet[Self]]:
+    def __match_args__(self) -> tuple[int, int | str, FollowDirection, AbstractSet[Self]]:
         return *self.__key(), self.sub_nodes
 
-    def __key(self) -> tuple[int, str, FollowDirection]:
+    def __key(self) -> tuple[int, int | str, FollowDirection]:
         return self.__address, self.__operand, self.__direction

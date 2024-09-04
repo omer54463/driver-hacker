@@ -1,62 +1,55 @@
 from collections.abc import Iterable, MutableMapping, Sequence
-from enum import Enum, Flag, auto
 from functools import partial
-from typing import assert_never, cast, final
+from pathlib import Path
+from typing import assert_never, cast
+
+from yaml import safe_load
 
 from driver_hacker.ida.ida import Ida
-
-
-@final
-class ReferenceDirection(Enum):
-    TO = auto()
-    FROM = auto()
-
-
-@final
-class ReferenceType(Flag):
-    ORDINARY_FLOW = auto()
-    CALL_FAR = auto()
-    CALL_NEAR = auto()
-    JUMP_FAR = auto()
-    JUMP_NEAR = auto()
-    OFFSET = auto()
-    WRITE = auto()
-    READ = auto()
-    TEXTUAL = auto()
-
-    CALL = CALL_FAR | CALL_NEAR
-    JUMP = JUMP_FAR | JUMP_NEAR
-    FLOW = CALL | JUMP
-    ALL = (
-        ORDINARY_FLOW
-        | CALL_FAR
-        | CALL_NEAR
-        | JUMP_FAR
-        | JUMP_NEAR
-        | OFFSET
-        | WRITE
-        | READ
-        | TEXTUAL
-    )
+from driver_hacker.resolver.function import Function
+from driver_hacker.resolver.reference_direction import ReferenceDirection
+from driver_hacker.resolver.reference_type import ReferenceType
 
 
 class Resolver:
     __ida: Ida
     __imports: dict[str, int]
 
+    __DEFAULT_ARGUMENT_COUNT = 0x10
+    __REGISTER_ARGUMENT_OPERANDS = ("rcx", "rdx", "r8", "r9")
+    __FUNCTION_ARGUMENT_COUNTS: dict[str, int] = safe_load(
+        (Path(__file__).parent / "function_argument_counts.yaml").read_text()
+    )
+    __FUNCTION_IMPORT_PREFIX = "__imp_"
+
     def __init__(self, ida: Ida) -> None:
         self.__ida = ida
         self.__imports = self.__get_imports()
 
     def resolve_name(self, address: int) -> str:
-        if (operand := self.try_resolve_name(address)) is not None:
-            return operand
+        if (name := self.try_resolve_name(address)) is not None:
+            return name
 
-        message = f"Could not resolve the name of the function at `{address:#x}`"
+        message = f"Could not resolve the name of the symbol at `{address:#x}`"
         raise ValueError(message)
 
     def try_resolve_name(self, address: int) -> str | None:
         return cast(str, self.__ida.name.get_name(address))
+
+    def resolve_function(self, address: int) -> Function:
+        if (function := self.try_resolve_function(address)) is not None:
+            return function
+
+        message = f"Could not resolve the function at `{address:#x}`"
+        raise ValueError(message)
+
+    def try_resolve_function(self, address: int) -> Function | None:
+        function_name = self.try_resolve_name(address)
+
+        if function_name is None:
+            return None
+
+        return Function(address, function_name, self.__get_function_arguments(function_name))
 
     def resolve_imports(self, names: Iterable[str]) -> Sequence[int]:
         return [self.__imports[name] for name in names]
@@ -149,3 +142,19 @@ class Resolver:
             )
 
         return result
+
+    def __get_function_arguments(self, function_name: str) -> Sequence[str]:
+        argument_count = self.__FUNCTION_ARGUMENT_COUNTS.get(
+            function_name.removeprefix(self.__FUNCTION_IMPORT_PREFIX),
+            self.__DEFAULT_ARGUMENT_COUNT,
+        )
+
+        register_argument_count = min(argument_count, 4)
+        register_argument_operands = self.__REGISTER_ARGUMENT_OPERANDS[:register_argument_count]
+
+        stack_argument_count = max(argument_count - register_argument_count, 0)
+        stack_argument_operands = tuple(
+            f"[rsp+{0x20 + 8 * index:#x}]" for index in range(stack_argument_count)
+        )
+
+        return register_argument_operands + stack_argument_operands

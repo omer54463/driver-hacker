@@ -11,7 +11,8 @@ from driver_hacker.follower.follower import Follower
 from driver_hacker.get_system_modules import get_system_modules
 from driver_hacker.ida.ida import Ida
 from driver_hacker.ida.ida_cache import IdaCache
-from driver_hacker.resolver.resolver import ReferenceType, Resolver
+from driver_hacker.resolver.reference_type import ReferenceType
+from driver_hacker.resolver.resolver import Resolver
 
 MAX_SIZE = 1 << 20
 

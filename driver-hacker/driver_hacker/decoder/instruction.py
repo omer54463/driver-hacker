@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Iterator, Sequence
-from typing import final
+from typing import final, overload
 
 
 @final
@@ -8,7 +8,7 @@ class Instruction:
     __address: int
     __following_address: int | None
     __mnemonic: str
-    __operands: list[str]
+    __operands: tuple[int | str, ...]
 
     def __init__(
         self,
@@ -16,13 +16,13 @@ class Instruction:
         address: int,
         following_address: int | None,
         mnemonic: str,
-        operands: Iterable[str],
+        operands: Iterable[int | str],
     ) -> None:
         self.__previous_address = previous_address
         self.__address = address
         self.__following_address = following_address
         self.__mnemonic = mnemonic
-        self.__operands = list(operands)
+        self.__operands = tuple(operands)
 
     @property
     def previous_address(self) -> int | None:
@@ -45,33 +45,62 @@ class Instruction:
         return len(self.__operands)
 
     @property
-    def operands(self) -> Sequence[str]:
+    def operands(self) -> Sequence[int | str]:
         return self.__operands
 
-    def get_operand(self, index: int) -> str:
-        return self.__operands[index]
+    @overload
+    def get_operand(self, index: int) -> int | str: ...
+
+    @overload
+    def get_operand(self, index: int, operand_type: type[int]) -> int: ...
+
+    @overload
+    def get_operand(self, index: int, operand_type: type[str]) -> str: ...
+
+    def get_operand(
+        self, index: int, operand_type: type[str] | type[int] | None = None
+    ) -> int | str:
+        operand = self.__operands[index]
+
+        if operand_type is None or isinstance(operand, operand_type):
+            return operand
+
+        message = f"Expected operand type `{type}`, got `{type(operand)}`"
+        raise TypeError(message)
 
     def __len__(self) -> int:
         return len(self.__operands)
 
-    def __contains__(self, operand: str) -> bool:
+    def __contains__(self, operand: int | str) -> bool:
         return operand in self.__operands
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[int | str]:
         return iter(self.__operands)
 
     def __repr__(self) -> str:
+        operand_parts = []
+
+        for operand in self.__operands:
+            match operand:
+                case str():
+                    operand_parts.append(f"{operand!r}")
+
+                case int():
+                    operand_parts.append(f"{operand:#x}")
+
+        operands_part = f"[{', '.join(operand_parts)}]"
+
         parts = (
             f"{None!r}" if self.__previous_address is None else f"{self.__previous_address:#x}",
             f"{self.__address:#x}",
             f"{None!r}" if self.__following_address is None else f"{self.__following_address:#x}",
             f"{self.__mnemonic!r}",
-            f"{self.__operands!r}",
+            operands_part,
         )
         return f"{type(self).__name__}({', '.join(parts)})"
 
     def __str__(self) -> str:
         return repr(self)
 
-    def __match_args__(self) -> tuple[str, ...]:
+    def __match_args__(self) -> tuple[int | str, ...]:
         return (self.__mnemonic, *self.__operands)
