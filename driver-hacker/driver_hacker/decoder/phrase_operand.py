@@ -10,17 +10,17 @@ class PhraseOperand:
     scale: int
 
     def __str__(self) -> str:
-        parts: tuple[str, ...] = ()
+        parts = []
 
         if self.base_register is not None:
-            parts += (f"{self.base_register}",)
+            parts.append(f"{self.base_register}")
 
         if self.index_register is not None:
             if self.scale > 1:
-                parts += (f"{self.index_register} * {self.scale}",)
+                parts.append(f"{self.index_register} * {self.scale}")
 
             else:
-                parts += (f"{self.index_register}",)
+                parts.append(f"{self.index_register}")
 
         return f"[{' + '.join(parts)}]"
 
