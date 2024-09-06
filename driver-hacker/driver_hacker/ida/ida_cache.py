@@ -3,10 +3,12 @@ from functools import partial
 from hashlib import md5
 from itertools import count
 from pathlib import Path
+from typing import final
 
 from driver_hacker.ida.ida import Ida
 
 
+@final
 class IdaCache:
     __working_directory: Path
     __port_generator: Iterator[int]

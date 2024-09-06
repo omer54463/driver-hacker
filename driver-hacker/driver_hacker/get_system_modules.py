@@ -106,7 +106,7 @@ def __parse_system_module_information_buffer(
 ) -> Sequence[_RtlProcessModuleInformation]:
     modules = _RtlProcessModules.from_buffer(buffer)
     array_type = _RtlProcessModuleInformation * modules.number_of_modules
-    return list(array_type.from_buffer(buffer, ctypes.sizeof(_RtlProcessModules)))
+    return tuple(array_type.from_buffer(buffer, ctypes.sizeof(_RtlProcessModules)))
 
 
 def __get_system_root() -> Path:

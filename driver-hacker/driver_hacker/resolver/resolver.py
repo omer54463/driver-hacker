@@ -1,7 +1,7 @@
 from collections.abc import Iterable, MutableMapping, Sequence
 from functools import partial
 from pathlib import Path
-from typing import assert_never, cast
+from typing import assert_never, cast, final
 
 from yaml import safe_load
 
@@ -11,6 +11,7 @@ from driver_hacker.resolver.reference_direction import ReferenceDirection
 from driver_hacker.resolver.reference_type import ReferenceType
 
 
+@final
 class Resolver:
     __ida: Ida
     __imports: dict[str, int]

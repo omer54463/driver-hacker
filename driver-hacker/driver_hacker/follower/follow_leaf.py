@@ -31,22 +31,19 @@ class FollowLeaf:
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, type(self)):
-            return self.__key() == other.__key()
+            return self.__tuple() == other.__tuple()
 
         return NotImplemented
 
     def __hash__(self) -> int:
-        return hash(self.__key())
+        return hash(self.__tuple())
 
     def __repr__(self) -> str:
         parts = (f"{self.__address:#x}", f"{self.__type}", f"{self.__value!r}")
         return f"{type(self).__name__}({', '.join(parts)})"
 
-    def __str__(self) -> str:
-        return repr(self)
-
     def __match_args__(self) -> tuple[int, FollowLeafType, Any]:
-        return self.__key()
+        return self.__tuple()
 
-    def __key(self) -> tuple[int, FollowLeafType, Any]:
+    def __tuple(self) -> tuple[int, FollowLeafType, Any]:
         return self.__address, self.__type, self.__value

@@ -1,5 +1,5 @@
 from collections.abc import Generator, Sequence
-from typing import TYPE_CHECKING, assert_never, cast
+from typing import TYPE_CHECKING, assert_never, cast, final
 
 from driver_hacker.decoder.data_operand import DataOperand
 from driver_hacker.decoder.decoder import Decoder
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     import ida_gdl  # type: ignore[import-not-found]
 
 
+@final
 class Follower:
     __ida: Ida
 

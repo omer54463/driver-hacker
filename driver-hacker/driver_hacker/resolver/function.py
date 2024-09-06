@@ -30,10 +30,8 @@ class Function:
             f"{self.__name!r}",
             f"{None!r}" if self.__argument_count is None else f"{self.__argument_count:#x}",
         )
-        return f"{type(self).__name__}({', '.join(parts)})"
 
-    def __str__(self) -> str:
-        return repr(self)
+        return f"{type(self).__name__}({', '.join(parts)})"
 
     def __match_args__(self) -> tuple[int, str, int | None]:
         return (self.__address, self.__name, self.__argument_count)

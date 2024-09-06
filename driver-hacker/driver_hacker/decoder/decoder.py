@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 from re import compile
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, final
 
 from yaml import safe_load
 
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     import ida_ua  # type: ignore[import-not-found]
 
 
+@final
 class Decoder:
     __ida: Ida
 

@@ -83,22 +83,27 @@ class FollowNode:
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, type(self)):
-            return self.__key() == other.__key()
+            return self.__tuple() == other.__tuple()
 
         return NotImplemented
 
     def __hash__(self) -> int:
-        return hash(self.__key())
+        return hash(self.__tuple())
 
     def __repr__(self) -> str:
-        parts = (f"{self.__address:#x}", f"{self.__operand!r}", f"{self.__direction}")
+        parts = (
+            f"{self.__address:#x}",
+            f"{self.__operand!r}",
+            f"{self.__direction}",
+            f"{self.__sub_nodes!r}",
+            f"{self.__leafs!r}",
+        )
         return f"{type(self).__name__}({', '.join(parts)})"
 
-    def __str__(self) -> str:
-        return repr(self)
+    def __match_args__(
+        self,
+    ) -> tuple[int, Operand, FollowDirection, AbstractSet[Self], AbstractSet[FollowLeaf]]:
+        return *self.__tuple(), self.sub_nodes, self.__leafs
 
-    def __match_args__(self) -> tuple[int, Operand, FollowDirection, AbstractSet[Self]]:
-        return *self.__key(), self.sub_nodes
-
-    def __key(self) -> tuple[int, Operand, FollowDirection]:
+    def __tuple(self) -> tuple[int, Operand, FollowDirection]:
         return self.__address, self.__operand, self.__direction
