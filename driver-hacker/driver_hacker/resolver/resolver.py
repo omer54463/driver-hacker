@@ -19,7 +19,6 @@ class Resolver:
     __FUNCTION_ARGUMENT_COUNTS: dict[str, int] = safe_load(
         (Path(__file__).parent / "function_argument_counts.yaml").read_text()
     )
-    __FUNCTION_IMPORT_PREFIX = "__imp_"
 
     def __init__(self, ida: Ida) -> None:
         self.__ida = ida
@@ -48,9 +47,7 @@ class Resolver:
         if function_name is None:
             return None
 
-        argument_count = self.__FUNCTION_ARGUMENT_COUNTS.get(
-            function_name.removeprefix(self.__FUNCTION_IMPORT_PREFIX)
-        )
+        argument_count = self.__FUNCTION_ARGUMENT_COUNTS.get(function_name)
 
         return Function(address, function_name, argument_count)
 

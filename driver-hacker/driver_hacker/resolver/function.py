@@ -7,6 +7,8 @@ class Function:
     __name: str
     __argument_count: int | None
 
+    __match_args__ = ("address", "name", "argument_count")
+
     def __init__(self, address: int, name: str, argument_count: int | None) -> None:
         self.__address = address
         self.__name = name
@@ -32,6 +34,3 @@ class Function:
         )
 
         return f"{type(self).__name__}({', '.join(parts)})"
-
-    def __match_args__(self) -> tuple[int, str, int | None]:
-        return (self.__address, self.__name, self.__argument_count)

@@ -1,2 +1,4 @@
+__imp_RtlInitUnicodeString: 2
+__imp_RtlInitUnicodeStringEx: 2
 RtlInitUnicodeString: 2
 RtlInitUnicodeStringEx: 2

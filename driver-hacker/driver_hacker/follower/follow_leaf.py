@@ -12,6 +12,8 @@ class FollowLeaf:
     __type: FollowLeafType
     __value: Any
 
+    __match_args__ = ("address", "type", "value")
+
     def __init__(self, address: int, type: FollowLeafType, value: Any = None) -> None:
         self.__address = address
         self.__type = type
@@ -41,9 +43,6 @@ class FollowLeaf:
     def __repr__(self) -> str:
         parts = (f"{self.__address:#x}", f"{self.__type}", f"{self.__value!r}")
         return f"{type(self).__name__}({', '.join(parts)})"
-
-    def __match_args__(self) -> tuple[int, FollowLeafType, Any]:
-        return self.__tuple()
 
     def __tuple(self) -> tuple[int, FollowLeafType, Any]:
         return self.__address, self.__type, self.__value

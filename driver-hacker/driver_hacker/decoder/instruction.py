@@ -14,6 +14,8 @@ class Instruction:
     __mnemonic: str
     __operands: tuple[Operand, ...]
 
+    __match_args__ = ("previous_address", "address", "following_address", "mnemonic", "operands")
+
     def __init__(
         self,
         previous_address: int | None,
@@ -93,12 +95,3 @@ class Instruction:
         )
 
         return f"{type(self).__name__}({', '.join(parts)})"
-
-    def __match_args__(self) -> tuple[int | None, int, int | None, str, Sequence[Operand]]:
-        return (
-            self.__previous_address,
-            self.__address,
-            self.__following_address,
-            self.__mnemonic,
-            self.__operands,
-        )
