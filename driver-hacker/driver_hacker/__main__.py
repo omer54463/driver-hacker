@@ -19,7 +19,7 @@ MAX_SIZE = 1 << 20
 
 
 @final
-@dataclass
+@dataclass(frozen=True)
 class Arguments:
     pattern: Pattern[str]
     working_directory: Path

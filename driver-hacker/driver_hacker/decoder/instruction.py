@@ -68,7 +68,7 @@ class Instruction:
         if operand_type is None or isinstance(operand, operand_type):
             return operand
 
-        message = f"Expected operand type `{type}`, got `{type(operand)}`"
+        message = f"Expected operand type `{operand_type}`, got `{type(operand)}`"
         raise TypeError(message)
 
     def __len__(self) -> int:

@@ -4,6 +4,7 @@ from typing import ParamSpec, TypeVar, final
 
 import ida_auto  # type: ignore[import-not-found]
 import ida_pro  # type: ignore[import-not-found]
+import idc  # type: ignore[import-not-found]
 import rpyc  # type: ignore[import-untyped]
 
 ParameterTypes = ParamSpec("ParameterTypes")
@@ -11,14 +12,12 @@ ReturnType = TypeVar("ReturnType")
 
 
 @final
-@dataclass
+@dataclass(frozen=True)
 class Arguments:
     port: int
 
 
 def parse_arguments() -> Arguments:
-    import idc  # type: ignore[import-not-found]
-
     argument_parser = ArgumentParser()
     argument_parser.add_argument("port", type=int)
     return Arguments(**vars(argument_parser.parse_args(idc.ARGV[1:])))
