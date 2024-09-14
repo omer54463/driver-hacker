@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Self, final
-
-from driver_hacker.follower.follow_leaf import FollowLeaf
+from typing import TYPE_CHECKING, Self, final
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -10,7 +8,7 @@ if TYPE_CHECKING:
 
     from driver_hacker.decoder.operand import Operand
     from driver_hacker.follower.follow_direction import FollowDirection
-    from driver_hacker.follower.follow_leaf_type import FollowLeafType
+    from driver_hacker.follower.follow_leaf import FollowLeaf
 
 
 @final
@@ -58,21 +56,13 @@ class FollowNode:
     def leafs(self) -> AbstractSet[FollowLeaf]:
         return self.__leafs
 
-    def new(self, address: int, operand: Operand, direction: FollowDirection) -> Self:
-        self.__sub_nodes.add(node := type(self)(address, operand, direction))
-        return node
-
-    def new_leaf(self, address: int, type: FollowLeafType, value: Any) -> FollowLeaf:
-        self.__leafs.add(leaf := FollowLeaf(address, type, value))
-        return leaf
-
     def add(self, node_or_leaf: Self | FollowLeaf) -> None:
         match node_or_leaf:
-            case FollowLeaf() as leaf:
-                self.__leafs.add(leaf)
-
-            case node:
+            case FollowNode() as node:
                 self.__sub_nodes.add(node)
+
+            case leaf:
+                self.__leafs.add(leaf)
 
     def __len__(self) -> int:
         return len(self.__sub_nodes)

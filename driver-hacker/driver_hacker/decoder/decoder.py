@@ -78,9 +78,7 @@ class Decoder:
 
                 case self.__ida.ua.o_displ:
                     base_register, index_register, scale = self.__prase_phrase_op(address, index)
-                    operands.append(
-                        DisplacementOperand(base_register, index_register, scale, op.addr)
-                    )
+                    operands.append(DisplacementOperand(base_register, index_register, scale, op.addr))
 
                 case self.__ida.ua.o_imm:
                     operands.append(ImmediateOperand(op.addr))

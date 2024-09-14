@@ -17,14 +17,4 @@ class ReferenceType(Flag):
     CALL = CALL_FAR | CALL_NEAR
     JUMP = JUMP_FAR | JUMP_NEAR
     FLOW = CALL | JUMP
-    ALL = (
-        ORDINARY_FLOW
-        | CALL_FAR
-        | CALL_NEAR
-        | JUMP_FAR
-        | JUMP_NEAR
-        | OFFSET
-        | WRITE
-        | READ
-        | TEXTUAL
-    )
+    ALL = ORDINARY_FLOW | CALL_FAR | CALL_NEAR | JUMP_FAR | JUMP_NEAR | OFFSET | WRITE | READ | TEXTUAL

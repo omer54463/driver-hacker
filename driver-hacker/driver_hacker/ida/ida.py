@@ -29,7 +29,7 @@ class Ida:
     __MODULE_NAMES = MappingProxyType(
         {
             "utils": "idautils",
-            "64": "ida_64",
+            "i64": "ida_64",
             "allins": "ida_allins",
             "auto": "ida_auto",
             "bitrange": "ida_bitrange",

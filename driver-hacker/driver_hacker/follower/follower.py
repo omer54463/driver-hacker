@@ -7,8 +7,9 @@ from driver_hacker.decoder.displacement_operand import DisplacementOperand
 from driver_hacker.decoder.instruction import Instruction
 from driver_hacker.decoder.operand import Operand
 from driver_hacker.decoder.register_operand import RegisterOperand
+from driver_hacker.follower.follow_call_leaf import FollowCallLeaf
+from driver_hacker.follower.follow_data_leaf import FollowDataLeaf
 from driver_hacker.follower.follow_direction import FollowDirection
-from driver_hacker.follower.follow_leaf_type import FollowLeafType
 from driver_hacker.follower.follow_node import FollowNode
 from driver_hacker.follower.follow_tree import FollowTree
 from driver_hacker.ida.ida import Ida
@@ -138,19 +139,13 @@ class Follower:
 
         match direction:
             case FollowDirection.BACKWARDS:
-                if (
-                    instruction.previous_address is not None
-                    and instruction.previous_address >= block.start_ea
-                ):
+                if instruction.previous_address is not None and instruction.previous_address >= block.start_ea:
                     return self.__decoder.decode_instruction(instruction.previous_address)
 
                 return None
 
             case FollowDirection.FORWARDS:
-                if (
-                    instruction.following_address is not None
-                    and instruction.following_address < block.end_ea
-                ):
+                if instruction.following_address is not None and instruction.following_address < block.end_ea:
                     return self.__decoder.decode_instruction(instruction.following_address)
 
                 return None
@@ -179,22 +174,28 @@ class Follower:
         node: FollowNode,
     ) -> tuple[FollowNode | None, bool]:
         if instruction.mnemonic in self.__MOV_MNEMONICS:
-            if node.operand == instruction.get_operand(0):
-                new_node = node.new(instruction.address, instruction.get_operand(1), node.direction)
-                return new_node, True
+            if instruction.get_operand(0) == node.operand:
+                match instruction.get_operand(1):
+                    case DataOperand(address):
+                        node.add(FollowDataLeaf(instruction.address, address))
+                        return None, True
 
-            if instruction.mnemonic == "lea" and node.operand == instruction.get_operand(1):
-                new_node = node.new(
-                    instruction.address,
-                    instruction.get_operand(0),
-                    node.direction.opposite(),
+                    case _:
+                        node.add(
+                            new_node := FollowNode(instruction.address, instruction.get_operand(1), node.direction)
+                        )
+                        return new_node, True
+
+            if instruction.mnemonic == "lea" and instruction.get_operand(1) == node.operand:
+                node.add(
+                    new_node := FollowNode(instruction.address, instruction.get_operand(0), node.direction.opposite())
                 )
                 return new_node, False
 
             if instruction.mnemonic == "call" and node.operand in self.__RETURN_VALUE_OPERANDS:
                 address = instruction.get_operand(0, DataOperand).address
                 function = self.__resolver.resolve_function(address)
-                node.new_leaf(instruction.address, FollowLeafType.FUNCTION_CALL, function)
+                node.add(FollowCallLeaf(instruction.address, function))
                 return None, True
 
         return None, False
@@ -204,36 +205,28 @@ class Follower:
         instruction: Instruction,
         node: FollowNode,
     ) -> tuple[FollowNode | None, bool]:
-        if instruction.mnemonic in self.__MOV_MNEMONICS and node.operand == instruction.get_operand(
-            1
-        ):
-            return node.new(instruction.address, instruction.get_operand(0), node.direction), True
+        if instruction.mnemonic in self.__MOV_MNEMONICS and node.operand == instruction.get_operand(1):
+            node.add(new_node := FollowNode(instruction.address, instruction.get_operand(0), node.direction))
+            return new_node, True
 
         if instruction.mnemonic == "call":
             address = instruction.get_operand(0, DataOperand).address
             function = self.__resolver.resolve_function(address)
             if node.operand in self.__get_function_arguments(function):
-                node.new_leaf(instruction.address, FollowLeafType.FUNCTION_CALL, function)
+                node.add(FollowCallLeaf(instruction.address, function))
                 return None, True
 
         return None, False
 
     def __get_function_arguments(self, function: Function) -> Sequence[Operand]:
-        argument_count = (
-            self.__DEFAULT_ARGUMENT_COUNT
-            if function.argument_count is None
-            else function.argument_count
-        )
+        argument_count = self.__DEFAULT_ARGUMENT_COUNT if function.argument_count is None else function.argument_count
 
         register_argument_count = min(argument_count, 4)
-        register_argument_operands = tuple(
-            register for register in self.__ARGUMENT_OPERANDS[:register_argument_count]
-        )
+        register_argument_operands = tuple(register for register in self.__ARGUMENT_OPERANDS[:register_argument_count])
 
         stack_argument_count = max(argument_count - register_argument_count, 0)
         stack_argument_operands = tuple(
-            DisplacementOperand("rsp", None, 1, 0x20 + 8 * index)
-            for index in range(stack_argument_count)
+            DisplacementOperand("rsp", None, 1, 0x20 + 8 * index) for index in range(stack_argument_count)
         )
 
         return register_argument_operands + stack_argument_operands

@@ -7,8 +7,7 @@ from typing import final
 from loguru import logger
 
 from driver_hacker.decoder.register_operand import RegisterOperand
-from driver_hacker.follower.follow_leaf import FollowLeaf
-from driver_hacker.follower.follow_leaf_type import FollowLeafType
+from driver_hacker.follower.follow_call_leaf import FollowCallLeaf
 from driver_hacker.follower.follow_node import FollowNode
 from driver_hacker.follower.follower import Follower
 from driver_hacker.get_system_modules import get_system_modules
@@ -69,9 +68,8 @@ def analyze(ida: Ida) -> None:
 
         for leaf in tree.leafs:
             match leaf:
-                case FollowLeaf(
+                case FollowCallLeaf(
                     leaf_address,
-                    FollowLeafType.FUNCTION_CALL,
                     Function(
                         _,
                         "__imp_RtlInitUnicodeString"
