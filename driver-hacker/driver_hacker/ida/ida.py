@@ -7,6 +7,7 @@ from types import MappingProxyType, TracebackType
 from typing import Any, Literal, ParamSpec, Self, TypeVar, final
 
 import rpyc  # type: ignore[import-untyped]
+from loguru import logger
 
 ParameterTypes = ParamSpec("ParameterTypes")
 ReturnType = TypeVar("ReturnType")
@@ -80,6 +81,8 @@ class Ida:
     )
 
     def __init__(self, path: Path, port: int = __DEFAULT_PORT) -> None:
+        logger.info(f"Launching IDA on `{path}` with via port `{port}`")
+
         if path.suffix == self.__DATABASE_SUFFIX:
             self.__binary = None
             self.__database = path
@@ -99,6 +102,13 @@ class Ida:
             self.__process.terminate()
             self.__process.wait()
             raise
+
+    @property
+    def name(self) -> str:
+        if self.__binary is not None:
+            return self.__binary.stem
+
+        return self.__database.stem
 
     @property
     def binary(self) -> Path:
@@ -185,5 +195,5 @@ class Ida:
         if cls.__IDAT.exists():
             return cls.__IDAT
 
-        message = f"Failed to find `{cls.__IDAT.name}`"
+        message = f"`{cls.__IDAT.name}` could not be found"
         raise FileNotFoundError(message)

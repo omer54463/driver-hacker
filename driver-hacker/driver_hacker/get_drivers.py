@@ -1,6 +1,6 @@
 import ctypes
 import ctypes.wintypes
-from collections.abc import Generator, Sequence
+from collections.abc import Mapping, Sequence
 from enum import IntEnum
 from os import getenv
 from pathlib import Path
@@ -67,6 +67,17 @@ class _RtlProcessModuleInformation(ctypes.Structure):
     )
 
 
+def get_drivers() -> Mapping[str, Path]:
+    buffer = __get_system_module_information_buffer()
+    system_root = __get_system_root()
+
+    return {
+        path.stem: path
+        for system_module_information in __parse_system_module_information_buffer(buffer)
+        if (path := __decode_full_path_name(system_root, system_module_information.full_path_name)) is not None
+    }
+
+
 def __get_system_module_information_buffer() -> ctypes.Array[ctypes.wintypes.CHAR]:
     nt_query_system_information = ctypes.WinDLL("ntdll").NtQuerySystemInformation
     nt_query_system_information.argtypes = (
@@ -101,20 +112,20 @@ def __get_system_module_information_buffer() -> ctypes.Array[ctypes.wintypes.CHA
     return buffer
 
 
+def __get_system_root() -> Path:
+    if (system_root := getenv(__SYSTEM_ROOT_ENVIRONMENT_VARIABLE)) is not None:
+        return Path(system_root)
+
+    message = f"Environment variable `{__SYSTEM_ROOT_ENVIRONMENT_VARIABLE}` could not be found"
+    raise RuntimeError(message)
+
+
 def __parse_system_module_information_buffer(
     buffer: ctypes.Array[ctypes.wintypes.CHAR],
 ) -> Sequence[_RtlProcessModuleInformation]:
     modules = _RtlProcessModules.from_buffer(buffer)
     array_type = _RtlProcessModuleInformation * modules.number_of_modules
     return tuple(array_type.from_buffer(buffer, ctypes.sizeof(_RtlProcessModules)))
-
-
-def __get_system_root() -> Path:
-    if (system_root := getenv(__SYSTEM_ROOT_ENVIRONMENT_VARIABLE)) is not None:
-        return Path(system_root)
-
-    message = f"`{__SYSTEM_ROOT_ENVIRONMENT_VARIABLE}` environment variable does not exist"
-    raise RuntimeError(message)
 
 
 def __decode_full_path_name(system_root: Path, data: bytes) -> Path | None:
@@ -125,23 +136,10 @@ def __decode_full_path_name(system_root: Path, data: bytes) -> Path | None:
 
     path = Path(string)
 
+    if __GHOST_DUMP_DRIVE_NAME_PATTERN.match(path.name):
+        return None
+
     if path.is_relative_to(__SYSTEM_ROOT_PREFIX):
         path = system_root / path.relative_to(__SYSTEM_ROOT_PREFIX)
 
-    if not path.exists():
-        if __GHOST_DUMP_DRIVE_NAME_PATTERN.match(path.name):
-            return None
-
-        message = f"Module `{path}` cannot be found"
-        raise FileNotFoundError(message)
-
     return path
-
-
-def get_system_modules() -> Generator[Path]:
-    buffer = __get_system_module_information_buffer()
-    system_root = __get_system_root()
-
-    for module in __parse_system_module_information_buffer(buffer):
-        if (path := __decode_full_path_name(system_root, module.full_path_name)) is not None:
-            yield path
