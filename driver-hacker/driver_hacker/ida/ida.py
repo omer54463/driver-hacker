@@ -60,7 +60,7 @@ class Ida:
             "mergemod": "ida_mergemod",
             "moves": "ida_moves",
             "nalt": "ida_nalt",
-            "name": "ida_name",
+            "iname": "ida_name",
             "netnode": "ida_netnode",
             "offset": "ida_offset",
             "pro": "ida_pro",
