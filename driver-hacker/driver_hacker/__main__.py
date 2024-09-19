@@ -4,7 +4,7 @@ from pathlib import Path
 from re import Pattern, compile
 from typing import final
 
-from driver_hacker.analyze_driver import analyze_driver
+from driver_hacker.driver_analyzer import DriverAnalyzer
 from driver_hacker.get_drivers import get_drivers
 from driver_hacker.ida.ida_cache import IdaCache
 
@@ -45,7 +45,9 @@ def main(arguments: Arguments) -> None:
         if driver == "ntoskrnl" or not arguments.pattern.match(driver):
             continue
 
-        analyze_driver(ntoskrnl, ida_cache.get(driver_path))
+        driver_analyzer = DriverAnalyzer()
+        driver_analyzer.add(ntoskrnl)
+        driver_analyzer.add(ida_cache.get(driver_path))
 
 
 if __name__ == "__main__":
