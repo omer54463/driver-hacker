@@ -1,8 +1,8 @@
+from contextlib import suppress
 from functools import cache
 from pathlib import Path
 from shutil import which
 from subprocess import DEVNULL, Popen
-from time import sleep
 from types import MappingProxyType, TracebackType
 from typing import Any, Literal, ParamSpec, Self, TypeVar, final
 
@@ -14,7 +14,7 @@ ReturnType = TypeVar("ReturnType")
 
 
 @final
-class Ida:
+class Image:
     __binary: Path | None
     __database: Path
     __port: int
@@ -81,7 +81,7 @@ class Ida:
     )
 
     def __init__(self, path: Path, port: int = __DEFAULT_PORT) -> None:
-        logger.info(f"Launching IDA on `{path}` with via port `{port}`")
+        logger.info(f"Launching IDA on `{path}` with via port {port}")
 
         if path.suffix == self.__DATABASE_SUFFIX:
             self.__binary = None
@@ -170,11 +170,8 @@ class Ida:
 
     def __create_connection(self) -> rpyc.Connection:
         while True:
-            try:
+            with suppress(ConnectionRefusedError):
                 return rpyc.classic.connect("localhost", self.__port)
-
-            except ConnectionRefusedError:
-                sleep(self.__CONNECTION_SLEEP)
 
     @staticmethod
     def __escape(value: str | Path) -> str:

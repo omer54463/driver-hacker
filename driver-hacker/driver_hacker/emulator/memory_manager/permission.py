@@ -10,7 +10,7 @@ from unicorn import (  # type: ignore[import-untyped]
 
 @final
 class Permission(Flag):
-    NONE = auto()
+    NONE = 0
     READ = auto()
     WRITE = auto()
     EXECUTE = auto()
