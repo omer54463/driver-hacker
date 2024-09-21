@@ -1,11 +1,11 @@
+import unicorn  # type: ignore[import-untyped]
 from loguru import logger
-from unicorn import Uc, x86_const  # type: ignore[import-untyped]
 
 
 class RegisterManager:
-    __uc: Uc
+    __uc: unicorn.Uc
 
-    def __init__(self, uc: Uc) -> None:
+    def __init__(self, uc: unicorn.Uc) -> None:
         self.__uc = uc
 
     def get(self, name: str) -> int:
@@ -26,7 +26,7 @@ class RegisterManager:
         self.__uc.reg_write(self.__register(name), value)
 
     def __register(self, name: str) -> int:
-        register = getattr(x86_const, f"UC_X86_REG_{name.upper()}", None)
+        register = getattr(unicorn.x86_const, f"UC_X86_REG_{name.upper()}", None)
 
         if register is None:
             message = f"Invalid register name `{name}`"

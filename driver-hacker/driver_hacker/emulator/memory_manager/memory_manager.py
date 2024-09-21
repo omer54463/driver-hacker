@@ -1,10 +1,8 @@
 from collections.abc import Generator
 from math import ceil, floor
 
+import unicorn  # type: ignore[import-untyped]
 from loguru import logger
-from unicorn import (  # type: ignore[import-untyped]
-    Uc,
-)
 
 from driver_hacker.emulator.memory_manager.allocated_blocks import AllocatedBlock
 from driver_hacker.emulator.memory_manager.free_block import FreeBlock
@@ -12,11 +10,11 @@ from driver_hacker.emulator.memory_manager.permission import Permission
 
 
 class MemoryManager:
-    __uc: Uc
+    __uc: unicorn.Uc
 
     __PAGE_SIZE = 0x1000
 
-    def __init__(self, uc: Uc, start: int, end: int) -> None:
+    def __init__(self, uc: unicorn.Uc, start: int, end: int) -> None:
         self.__uc = uc
         self.__start = start
         self.__end = end

@@ -1,12 +1,10 @@
 from typing import TYPE_CHECKING
 
+import unicorn  # type: ignore[import-untyped]
 from loguru import logger
-from unicorn import (  # type: ignore[import-untyped]
-    UC_ARCH_X86,
-    UC_MODE_64,
-    Uc,
-)
 
+from driver_hacker.emulator.hook_manager.hook_manager import HookManager
+from driver_hacker.emulator.hook_manager.valid_memory_hook_type import ValidMemoryHookType
 from driver_hacker.emulator.memory_manager.memory_manager import MemoryManager
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.emulator.register_manager.register_manager import RegisterManager
@@ -17,17 +15,19 @@ if TYPE_CHECKING:
 
 
 class Emulator:
-    __uc: Uc
+    __uc: unicorn.Uc
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
+    __hook_manager: HookManager
 
     def __init__(self, memory_start: int, memory_end: int) -> None:
-        self.__uc = Uc(UC_ARCH_X86, UC_MODE_64)
+        self.__uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
+        self.__hook_manager = HookManager(self.__uc)
 
     @property
-    def uc(self) -> Uc:
+    def uc(self) -> unicorn.Uc:
         return self.__uc
 
     @property
@@ -37,6 +37,10 @@ class Emulator:
     @property
     def memory(self) -> MemoryManager:
         return self.__memory_manager
+
+    @property
+    def hook(self) -> HookManager:
+        return self.__hook_manager
 
     def add_image(self, image: Image) -> None:
         image_start: int = image.nalt.get_imagebase()
@@ -58,4 +62,16 @@ class Emulator:
             data: bytes = image.bytes.get_bytes(segment.start_ea, segment_size)
             self.__uc.mem_write(segment.start_ea, data)
 
+            segment_name: str = image.segment.get_segm_name(segment)
+            if segment_name == ".idata":
+                self.__hook_manager.add(
+                    ValidMemoryHookType.READ,
+                    self.__import_callback,
+                    segment.start_ea,
+                    segment.end_ea,
+                )
+
             segment = image.segment.get_next_seg(segment.start_ea)
+
+    def __import_callback(self, _access: int, _address: int, _size: int, _value: int, _user_data: None) -> None:
+        breakpoint()  # noqa: T100
