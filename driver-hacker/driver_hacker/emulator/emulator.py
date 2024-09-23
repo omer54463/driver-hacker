@@ -4,7 +4,6 @@ import unicorn  # type: ignore[import-untyped]
 from loguru import logger
 
 from driver_hacker.emulator.hook_manager.hook_manager import HookManager
-from driver_hacker.emulator.hook_manager.valid_memory_hook_type import ValidMemoryHookType
 from driver_hacker.emulator.memory_manager.memory_manager import MemoryManager
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.emulator.register_manager.register_manager import RegisterManager
@@ -19,12 +18,14 @@ class Emulator:
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
     __hook_manager: HookManager
+    __images: list[Image]
 
     def __init__(self, memory_start: int, memory_end: int) -> None:
         self.__uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
         self.__hook_manager = HookManager(self.__uc)
+        self.__images = []
 
     @property
     def uc(self) -> unicorn.Uc:
@@ -43,6 +44,11 @@ class Emulator:
         return self.__hook_manager
 
     def add_image(self, image: Image) -> None:
+        self.__map_sections(image)
+        self.__add_import_hook(image)
+        self.__images.append(image)
+
+    def __map_sections(self, image: Image) -> None:
         image_start: int = image.nalt.get_imagebase()
         image_end: int = max(image.segment.getnseg(i).end_ea for i in range(image.segment.get_segm_qty()))
         image_size = image_end - image_start
@@ -51,7 +57,7 @@ class Emulator:
         self.__memory_manager.unmap(address, image_size)
         image.segment.rebase_program(address - image_start, image.segment.MSF_FIXONCE)
 
-        logger.info("Adding image `{}` at address {:#x}", image.name, address)
+        logger.info("Adding image `{}` at address {:#x}", image.path.stem, address)
 
         segment: segment_t = image.segment.get_first_seg()
         while segment is not None:
@@ -62,16 +68,7 @@ class Emulator:
             data: bytes = image.bytes.get_bytes(segment.start_ea, segment_size)
             self.__uc.mem_write(segment.start_ea, data)
 
-            segment_name: str = image.segment.get_segm_name(segment)
-            if segment_name == ".idata":
-                self.__hook_manager.add(
-                    ValidMemoryHookType.READ,
-                    self.__import_callback,
-                    segment.start_ea,
-                    segment.end_ea,
-                )
-
             segment = image.segment.get_next_seg(segment.start_ea)
 
-    def __import_callback(self, _access: int, _address: int, _size: int, _value: int, _user_data: None) -> None:
-        breakpoint()  # noqa: T100
+    def __add_import_hook(self, image: Image) -> None:
+        pass

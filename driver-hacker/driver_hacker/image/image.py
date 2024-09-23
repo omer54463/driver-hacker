@@ -60,7 +60,7 @@ class Image:
             "mergemod": "ida_mergemod",
             "moves": "ida_moves",
             "nalt": "ida_nalt",
-            "iname": "ida_name",
+            "name": "ida_name",
             "netnode": "ida_netnode",
             "offset": "ida_offset",
             "pro": "ida_pro",
@@ -81,7 +81,7 @@ class Image:
     )
 
     def __init__(self, path: Path, port: int = __DEFAULT_PORT) -> None:
-        logger.info(f"Launching IDA on `{path}` with via port {port}")
+        logger.info(f"Launching IDA on `{path.stem}` with via port {port}")
 
         if path.suffix == self.__DATABASE_SUFFIX:
             self.__binary = None
@@ -104,11 +104,11 @@ class Image:
             raise
 
     @property
-    def name(self) -> str:
+    def path(self) -> Path:
         if self.__binary is not None:
-            return self.__binary.stem
+            return self.__binary
 
-        return self.__database.stem
+        return self.__database
 
     @property
     def binary(self) -> Path:

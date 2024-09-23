@@ -54,8 +54,12 @@ def parse_arguments() -> Arguments:
 def analyze(image: Image) -> None:
     emulator = Emulator(__MEMORY_START, __MEMORY_END)
     emulator.add_image(image)
+
     stack = emulator.memory.allocate(__STACK_SIZE * 2, Permission.READ_WRITE) + __STACK_SIZE
     emulator.register.set("rsp", stack)
+
+    driver_entry: int = image.name.get_name_ea(image.api.BADADDR, "DriverEntry")
+    emulator.uc.emu_start(driver_entry, 0)
 
 
 def main(arguments: Arguments) -> None:
