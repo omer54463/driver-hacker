@@ -5,7 +5,7 @@ import unicorn  # type: ignore[import-untyped]
 
 
 @final
-class ValidMemoryHookType(Flag):
+class MemoryHookType(Flag):
     NONE = 0
 
     READ = auto()
@@ -18,13 +18,13 @@ class ValidMemoryHookType(Flag):
     def to_uc(self) -> int:
         hook_type = 0
 
-        if self & ValidMemoryHookType.READ:
+        if self & MemoryHookType.READ:
             hook_type |= unicorn.UC_HOOK_MEM_READ
 
-        if self & ValidMemoryHookType.WRITE:
+        if self & MemoryHookType.WRITE:
             hook_type |= unicorn.UC_HOOK_MEM_WRITE
 
-        if self & ValidMemoryHookType.FETCH:
+        if self & MemoryHookType.FETCH:
             hook_type |= unicorn.UC_HOOK_MEM_FETCH
 
         return hook_type
