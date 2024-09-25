@@ -15,16 +15,20 @@ if TYPE_CHECKING:
 
 class Emulator:
     __uc: unicorn.Uc
+
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
     __hook_manager: HookManager
+
     __images: list[Image]
 
     def __init__(self, memory_start: int, memory_end: int) -> None:
         self.__uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
+
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
         self.__hook_manager = HookManager(self.__uc)
+
         self.__images = []
 
     @property
