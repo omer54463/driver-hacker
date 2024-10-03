@@ -1,6 +1,9 @@
+from typing import final
+
 from driver_hacker.emulator.memory_manager.permission import Permission
 
 
+@final
 class AllocatedBlock:
     __start: int
     __end: int

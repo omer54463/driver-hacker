@@ -1,20 +1,18 @@
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, final
 
 import unicorn  # type: ignore[import-untyped]
 from loguru import logger
 
 from driver_hacker.emulator.hook_manager.hook import Hook
 from driver_hacker.emulator.hook_manager.hook_type import HookType
-from driver_hacker.emulator.hook_manager.invalid_memory_hook_type import InvalidMemoryHookType
-from driver_hacker.emulator.hook_manager.memory_hook_type import MemoryHookType
 
-C = TypeVar("C")
 P = ParamSpec("P")
 R = TypeVar("R")
 
 
+@final
 class HookManager:
     __uc: unicorn.Uc
 
@@ -26,14 +24,14 @@ class HookManager:
 
     def add(
         self,
-        hook_type: HookType | MemoryHookType | InvalidMemoryHookType,
+        hook_type: HookType,
         callback: Callable[..., R],
         user_data: Any | None = None,
         start: int = __DEFAULT_START,
         end: int = __DEFAULT_END,
     ) -> Hook:
         logger.trace(
-            "add(hook_type={:#x}, callback={}, user_data={}, start={:#x}, end={:#x})",
+            "add(hook_type={}, callback={}, user_data={}, start={:#x}, end={:#x})",
             hook_type,
             callback,
             user_data,

@@ -1,3 +1,7 @@
+from typing import final
+
+
+@final
 class FreeBlock:
     __start: int
     __end: int

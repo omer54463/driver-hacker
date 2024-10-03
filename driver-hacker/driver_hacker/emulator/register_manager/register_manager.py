@@ -1,7 +1,10 @@
+from typing import final
+
 import unicorn  # type: ignore[import-untyped]
 from loguru import logger
 
 
+@final
 class RegisterManager:
     __uc: unicorn.Uc
 

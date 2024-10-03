@@ -51,34 +51,49 @@ def parse_arguments() -> Arguments:
     return Arguments(**vars(argument_parser.parse_args()))
 
 
+def rtl_init_unicode_string_ex(emulator: Emulator) -> int:
+    source_string_address = emulator.register.get("rdx")
+    source_string = emulator.memory.read_wstring(source_string_address)
+    source_string_byte_count = len(source_string.encode("utf-16-le"))
+
+    destination_string_address = emulator.register.get("rcx")
+    emulator.memory.write_word(destination_string_address, source_string_byte_count)
+    emulator.memory.write_word(destination_string_address + 2, source_string_byte_count)
+    emulator.memory.write_pointer(destination_string_address + 8, source_string_address)
+    return 0
+
+
+@logger.catch
 def analyze(image: Image) -> None:
     emulator = Emulator(__MEMORY_START, __MEMORY_END)
     emulator.add_image(image)
 
+    emulator.add_fallback("ntoskrnl", "RtlQueryFeatureConfigurationChangeStamp", lambda _: 0)
+    emulator.add_fallback("ntoskrnl", "RtlQueryFeatureConfiguration", lambda _: 0)
+    emulator.add_fallback("ntoskrnl", "EtwRegister", lambda _: 0)
+    emulator.add_fallback("ntoskrnl", "EtwSetInformation", lambda _: 0)
+    emulator.add_fallback("ntoskrnl", "RtlInitUnicodeStringEx", rtl_init_unicode_string_ex)
+
     stack = emulator.memory.allocate(__STACK_SIZE * 2, Permission.READ_WRITE) + __STACK_SIZE
     emulator.register.set("rsp", stack)
 
-    driver_entry: int = image.name.get_name_ea(image.api.BADADDR, "DriverEntry")
-    emulator.uc.emu_start(driver_entry, 0)
+    driver_entry = emulator.get_export(image.path.stem, "DriverEntry")
+    try:
+        emulator.uc.emu_start(driver_entry, 0)
+    except Exception:
+        emulator.print_stack()
+        raise
 
 
 def main(arguments: Arguments) -> None:
     logger.remove()
     logger.add(stderr, level="TRACE" if arguments.verbose else "INFO")
 
-    try:
-        image_cache = ImageCache(arguments.cache)
-        drivers = get_drivers()
+    image_cache = ImageCache(arguments.cache)
+    drivers = get_drivers()
 
-        for driver, driver_path in drivers.items():
-            if not arguments.pattern.match(driver):
-                continue
+    for driver, driver_path in drivers.items():
+        if not arguments.pattern.match(driver):
+            continue
 
-            analyze(image_cache.get(driver_path))
-
-    except Exception as exception:
-        if arguments.verbose:
-            logger.exception(exception)
-
-        else:
-            logger.error(exception)
+        analyze(image_cache.get(driver_path))

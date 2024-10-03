@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from math import ceil, floor
+from typing import Literal, final
 
 import unicorn  # type: ignore[import-untyped]
 from loguru import logger
@@ -9,15 +10,26 @@ from driver_hacker.emulator.memory_manager.free_block import FreeBlock
 from driver_hacker.emulator.memory_manager.permission import Permission
 
 
+@final
 class MemoryManager:
     __uc: unicorn.Uc
-
-    __PAGE_SIZE = 0x1000
 
     def __init__(self, uc: unicorn.Uc, start: int, end: int) -> None:
         self.__uc = uc
         self.__start = start
         self.__end = end
+
+    @property
+    def page_size(self) -> int:
+        return 0x1000
+
+    @property
+    def pointer_size(self) -> int:
+        return 8
+
+    @property
+    def endian(self) -> Literal["big", "little"]:
+        return "little"
 
     def map(self, start: int, size: int, permissions: Permission = Permission.ALL) -> None:
         logger.trace("map(start={:#x}, size={:#x}, permissions={})", start, size, permissions)
@@ -76,6 +88,70 @@ class MemoryManager:
                     Permission.from_uc(permissions),
                 )
 
+    def write(self, address: int, data: bytes) -> None:
+        self.__uc.mem_write(address, data)
+
+    def write_byte(self, address: int, value: int) -> None:
+        self.write(address, value.to_bytes(1, self.endian))
+
+    def write_word(self, address: int, value: int) -> None:
+        self.write(address, value.to_bytes(2, self.endian))
+
+    def write_dword(self, address: int, value: int) -> None:
+        self.write(address, value.to_bytes(4, self.endian))
+
+    def write_qword(self, address: int, value: int) -> None:
+        self.write(address, value.to_bytes(8, self.endian))
+
+    def write_pointer(self, address: int, value: int) -> None:
+        self.write(address, value.to_bytes(self.pointer_size, self.endian))
+
+    def write_string(self, address: int, value: str) -> None:
+        for byte in value.encode("ascii"):
+            self.write_byte(address, byte)
+            address += 1
+
+    def write_wstring(self, address: int, value: str) -> None:
+        for byte in value.encode("utf-16-le"):
+            self.write_byte(address, byte)
+            address += 1
+
+    def read(self, address: int, size: int) -> bytes:
+        return bytes(self.__uc.mem_read(address, size))
+
+    def read_byte(self, address: int) -> int:
+        return int.from_bytes(self.read(address, 1), self.endian)
+
+    def read_word(self, address: int) -> int:
+        return int.from_bytes(self.read(address, 2), self.endian)
+
+    def read_dword(self, address: int) -> int:
+        return int.from_bytes(self.read(address, 4), self.endian)
+
+    def read_qword(self, address: int) -> int:
+        return int.from_bytes(self.read(address, 8), self.endian)
+
+    def read_pointer(self, address: int) -> int:
+        return int.from_bytes(self.read(address, self.pointer_size), self.endian)
+
+    def read_string(self, address: int) -> str:
+        data = b""
+
+        while (character := self.read(address, 1)) != b"\0":
+            data += character
+            address += 1
+
+        return data.decode("ascii")
+
+    def read_wstring(self, address: int) -> str:
+        data = b""
+
+        while (character := self.read(address, 2)) != b"\0\0":
+            data += character
+            address += 2
+
+        return data.decode("utf-16-le")
+
     def __process_start_and_size(self, start: int, size: int) -> tuple[int, int, int]:
         aligned_start = self.__align_down(start)
         aligned_size = self.__align_up(size + start - aligned_start)
@@ -101,10 +177,8 @@ class MemoryManager:
 
         return AllocatedBlock(overlap_start, overlap_end, block.permissions)
 
-    @classmethod
-    def __align_down(cls, value: int) -> int:
-        return floor(value / cls.__PAGE_SIZE) * cls.__PAGE_SIZE
+    def __align_down(self, value: int) -> int:
+        return floor(value / self.page_size) * self.page_size
 
-    @classmethod
-    def __align_up(cls, value: int) -> int:
-        return ceil(value / cls.__PAGE_SIZE) * cls.__PAGE_SIZE
+    def __align_up(self, value: int) -> int:
+        return ceil(value / self.page_size) * self.page_size
