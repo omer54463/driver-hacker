@@ -66,6 +66,12 @@ class MemoryManager:
         aligned_start, _, aligned_size = self.__process_start_and_size(start, size)
         self.__uc.mem_unmap(aligned_start, aligned_size)
 
+    def is_mapped(self, address: int) -> bool:
+        return any(block.start <= address < block.end for block in self.allocated_blocks)
+
+    def is_unmapped(self, address: int) -> bool:
+        return any(block.start <= address < block.end for block in self.free_blocks)
+
     @property
     def free_blocks(self) -> Generator[FreeBlock]:
         current = self.__start
