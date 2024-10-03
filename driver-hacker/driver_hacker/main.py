@@ -53,50 +53,16 @@ def parse_arguments() -> Arguments:
     return Arguments(**vars(argument_parser.parse_args()))
 
 
-def rtl_init_unicode_string_ex(emulator: Emulator) -> int:
-    source_string_address = emulator.register.get("rdx")
-    source_string = emulator.memory.read_wstring(source_string_address)
-
-    destination_string_address = emulator.register.get("rcx")
-    emulator.memory.write_word(destination_string_address, len(source_string) * 2)
-    emulator.memory.write_word(destination_string_address + 2, len(source_string) * 2)
-    emulator.memory.write_pointer(destination_string_address + 8, source_string_address)
-    return 0
-
-
-def rtl_init_ansi_string(emulator: Emulator) -> int:
-    source_string_address = emulator.register.get("rdx")
-    source_string = emulator.memory.read_string(source_string_address)
-
-    destination_string_address = emulator.register.get("rcx")
-    emulator.memory.write_word(destination_string_address, len(source_string))
-    emulator.memory.write_word(destination_string_address + 2, len(source_string))
-    emulator.memory.write_pointer(destination_string_address + 8, source_string_address)
-    return 0
-
-
-def ex_allocate_pool_2(emulator: Emulator) -> int:
+def ex_allocate_pool(emulator: Emulator) -> int:
     number_of_bytes = emulator.register.get("rdx")
     return emulator.memory.allocate(number_of_bytes, Permission.READ_WRITE)
-
-
-def ex_allocate_pool_with_tag(emulator: Emulator) -> int:
-    number_of_bytes = emulator.register.get("rdx")
-    return emulator.memory.allocate(number_of_bytes, Permission.READ_WRITE)
-
-
-def strcpy_s(emulator: Emulator) -> int:
-    source = emulator.register.get("r8")
-    string = emulator.memory.read_string(source)
-    destination = emulator.register.get("rcx")
-    emulator.memory.write_string(destination, string)
-    return 0
 
 
 def io_create_device(emulator: Emulator) -> int:
     device_name_address = emulator.register.get("r8")
     device_name_buffer = emulator.memory.read_pointer(device_name_address + 8)
     device_name = emulator.memory.read_wstring(device_name_buffer)
+
     logger.success("Device: {}", device_name)
     return 0
 
@@ -114,25 +80,20 @@ def io_create_symbolic_link(emulator: Emulator) -> int:
     return 0
 
 
-def analyze(image: Image) -> None:
+def analyze(ntoskrnl: Image, driver: Image) -> None:
     emulator = Emulator(__STACK_SIZE, __MEMORY_START, __MEMORY_END)
-    emulator.add_image(image)
 
-    emulator.add_fallback("ntoskrnl", "RtlQueryFeatureConfigurationChangeStamp", lambda _: 0)
-    emulator.add_fallback("ntoskrnl", "RtlQueryFeatureConfiguration", lambda _: 0)
-    emulator.add_fallback("ntoskrnl", "EtwRegister", lambda _: 0)
-    emulator.add_fallback("ntoskrnl", "EtwSetInformation", lambda _: 0)
-    emulator.add_fallback("ntoskrnl", "ExInitializeResourceLite", lambda _: 0)
+    emulator.add_image(ntoskrnl)
+    emulator.add_image(driver)
 
-    emulator.add_fallback("ntoskrnl", "RtlInitUnicodeStringEx", rtl_init_unicode_string_ex)
-    emulator.add_fallback("ntoskrnl", "RtlInitAnsiString", rtl_init_ansi_string)
-    emulator.add_fallback("ntoskrnl", "ExAllocatePool2", ex_allocate_pool_2)
-    emulator.add_fallback("ntoskrnl", "ExAllocatePoolWithTag", ex_allocate_pool_with_tag)
+    emulator.add_override("ntoskrnl", "EtwRegister", lambda _: 0)
+    emulator.add_override("ntoskrnl", "ExInitializeResourceLite", lambda _: 0)
 
-    emulator.add_fallback("ntoskrnl", "strcpy_s", strcpy_s)
+    emulator.add_override("ntoskrnl", "ExAllocatePool2", ex_allocate_pool)
+    emulator.add_override("ntoskrnl", "ExAllocatePoolWithTag", ex_allocate_pool)
 
-    emulator.add_fallback("ntoskrnl", "IoCreateDevice", io_create_device)
-    emulator.add_fallback("ntoskrnl", "IoCreateSymbolicLink", io_create_symbolic_link)
+    emulator.add_override("ntoskrnl", "IoCreateDevice", io_create_device)
+    emulator.add_override("ntoskrnl", "IoCreateSymbolicLink", io_create_symbolic_link)
 
     emulator.memory.map(__KUSER_SHARED_DATA_ADDRESS, emulator.memory.page_size, Permission.READ)
 
@@ -140,7 +101,7 @@ def analyze(image: Image) -> None:
     emulator.register.set("rcx", driver_object)
 
     try:
-        emulator.start(emulator.get_export(image.path.stem, "DriverEntry"))
+        emulator.start(emulator.get_export(driver.path.stem, "DriverEntry"))
 
     except Exception as exception:
         logger.error(exception)
@@ -154,6 +115,8 @@ def main(arguments: Arguments) -> None:
     image_cache = ImageCache(arguments.cache)
     drivers = get_drivers()
 
+    ntoskrnl = image_cache.get(drivers["ntoskrnl"])
+
     for driver, driver_path in drivers.items():
-        if arguments.pattern.match(driver):
-            analyze(image_cache.get(driver_path))
+        if driver != "ntoskrnl" and arguments.pattern.match(driver):
+            analyze(ntoskrnl, image_cache.get(driver_path))
