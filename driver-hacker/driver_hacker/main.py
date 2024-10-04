@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from re import Pattern, compile
 from sys import stderr
-from typing import final
+from typing import TYPE_CHECKING, final
 
 from loguru import logger
 
@@ -13,7 +13,10 @@ from driver_hacker.get_drivers import get_drivers
 from driver_hacker.image.ida_cache import ImageCache
 from driver_hacker.image.image import Image
 
-__STACK_SIZE = 0x1000
+if TYPE_CHECKING:
+    from loguru import Record
+
+__STACK_SIZE = 0x2000
 __MEMORY_START = 0xFFFF000000000000
 __MEMORY_END = 0xFFFFFFFFFFFFFFFF
 
@@ -108,9 +111,23 @@ def analyze(ntoskrnl: Image, driver: Image) -> None:
         emulator.stack_trace("ERROR")
 
 
+def format_function(record: "Record") -> str:
+    return (
+        f"<green>{record['time']:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        f"<level>{record['level']:<8}</level> | "
+        f"<cyan>{__package__}</cyan> - "
+        f"<level>{record['message']}</level>"
+        "\n"
+    ).format(record)
+
+
 def main(arguments: Arguments) -> None:
     logger.remove()
-    logger.add(stderr, level="TRACE" if arguments.verbose else "INFO")
+    logger.add(
+        stderr,
+        level="TRACE" if arguments.verbose else "INFO",
+        format=format_function,
+    )
 
     image_cache = ImageCache(arguments.cache)
     drivers = get_drivers()

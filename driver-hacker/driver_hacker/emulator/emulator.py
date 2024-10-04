@@ -151,46 +151,17 @@ class Emulator:
             case never:
                 assert_never(never)
 
-    def try_get_name(self, address: int) -> str | None:
-        for image_name, image in self.__images.items():
-            function: func_t | None = image.funcs.get_func(address)
-            if function is None:
-                continue
-
-            name: str = image.funcs.get_func_name(function.start_ea)
-            distance = address - function.start_ea
-
-            if distance < 0:
-                return f"{image_name}!{name}-{-distance}"
-            if distance == 0:
-                return f"{image_name}!{name}"
-            return f"{image_name}!{name}+{distance}"
-
-        return None
-
-    def get_name(self, address: int) -> str:
-        match self.try_get_name(address):
-            case str(name):
-                return name
-
-            case None:
-                message = f"Cannot find name for address {address:#x}"
-                raise ValueError(message)
-
-            case never:
-                assert_never(never)
-
     def stack_trace(self, level: int | str) -> None:
         value = self.register.get("rip")
-        if isinstance(name := self.try_get_name(value), str):
+        if isinstance(name := self.__try_get_name(value), str):
             logger.log(level, "{:#018x} [{}]", value, name)
 
         start_address = self.register.get("rsp")
         address = start_address
         while self.memory.is_mapped(address) and address - start_address < self.stack_size:
             value = self.memory.read_pointer(address)
-            if isinstance(name := self.try_get_name(value), str):
-                logger.log(level, "{:#018x} [{}]", address, name)
+            if isinstance(name := self.__try_get_name(value), str):
+                logger.log(level, "{:#018x} [{}]", value, name)
             address += self.memory.pointer_size
 
     def start(self, address: int) -> None:
@@ -272,3 +243,20 @@ class Emulator:
 
             case never:
                 assert_never(never)
+
+    def __try_get_name(self, address: int) -> str | None:
+        for image_name, image in self.__images.items():
+            function: func_t | None = image.funcs.get_func(address)
+            if function is None:
+                continue
+
+            name: str = image.funcs.get_func_name(function.start_ea)
+            distance = address - function.start_ea
+
+            if distance < 0:
+                return f"{image_name}!{name}-{-distance}"
+            if distance == 0:
+                return f"{image_name}!{name}"
+            return f"{image_name}!{name}+{distance}"
+
+        return None
