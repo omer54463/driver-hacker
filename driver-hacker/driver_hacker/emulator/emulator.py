@@ -4,8 +4,6 @@ from typing import TYPE_CHECKING, ParamSpec, Self, TypeVar, assert_never, final
 import unicorn  # type: ignore[import-untyped]
 from loguru import logger
 
-from driver_hacker.emulator.hook_manager.hook_manager import HookManager
-from driver_hacker.emulator.hook_manager.hook_type import HookType
 from driver_hacker.emulator.memory_manager.memory_manager import MemoryManager
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.emulator.register_manager.register_manager import RegisterManager
@@ -25,7 +23,6 @@ class Emulator:
 
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
-    __hook_manager: HookManager
 
     __stack_size: int
 
@@ -38,7 +35,6 @@ class Emulator:
 
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
-        self.__hook_manager = HookManager(self.__uc)
 
         self.__stack_size = stack_size
 
@@ -57,10 +53,6 @@ class Emulator:
     @property
     def memory(self) -> MemoryManager:
         return self.__memory_manager
-
-    @property
-    def hook(self) -> HookManager:
-        return self.__hook_manager
 
     @property
     def stack_size(self) -> int:
@@ -237,8 +229,8 @@ class Emulator:
                     (target_module_name, target_ordinal) if target_name is None else (target_module_name, target_name)
                 )
                 hook_address = self.memory.allocate(self.memory.page_size, Permission.READ_EXECUTE)
-                self.hook.add(
-                    HookType.CODE,
+                self.uc.hook_add(
+                    unicorn.UC_HOOK_CODE,
                     self.__import_hook,
                     target,
                     hook_address,
@@ -249,7 +241,7 @@ class Emulator:
 
             image.nalt.enum_import_names(index, __callback)
 
-    def __import_hook(self, _address: int, _size: int, target: tuple[str, int | str]) -> None:
+    def __import_hook(self, _uc: unicorn.Uc, _address: int, _size: int, target: tuple[str, int | str]) -> None:
         if target in self.__overrides:
             self.__run_callback(self.__overrides[target])
             return
