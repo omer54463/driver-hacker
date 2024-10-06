@@ -22,7 +22,6 @@ class Image:
     __DATABASE_SUFFIX = ".i64"
     __SERVER = Path(__file__).parent / "ida_server.py"
     __IDAT = Path("C:\\Program Files\\IDA Professional 9.0\\idat64.exe")
-    __CONNECTION_SLEEP = 0.5
 
     __MODULE_NAMES = MappingProxyType(
         {
