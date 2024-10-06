@@ -1,14 +1,11 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
-from typing import ParamSpec, TypeVar, final
+from typing import final
 
 import ida_auto  # type: ignore[import-not-found]
 import ida_pro  # type: ignore[import-not-found]
 import idc  # type: ignore[import-not-found]
 import rpyc  # type: ignore[import-untyped]
-
-ParameterTypes = ParamSpec("ParameterTypes")
-ReturnType = TypeVar("ReturnType")
 
 
 @final

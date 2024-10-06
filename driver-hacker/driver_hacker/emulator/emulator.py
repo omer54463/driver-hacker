@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import TYPE_CHECKING, ParamSpec, Self, TypeVar, assert_never, final
+from typing import TYPE_CHECKING, Self, assert_never, final
 
 import unicorn  # type: ignore[import-untyped]
 from loguru import logger
@@ -12,9 +12,6 @@ from driver_hacker.image.image import Image
 if TYPE_CHECKING:
     from ida_funcs import func_t  # type: ignore[import-not-found]
     from ida_segment import segment_t  # type: ignore[import-not-found]
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 @final

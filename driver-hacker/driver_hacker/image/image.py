@@ -4,13 +4,10 @@ from pathlib import Path
 from shutil import which
 from subprocess import DEVNULL, Popen
 from types import MappingProxyType, TracebackType
-from typing import Any, Literal, ParamSpec, Self, TypeVar, final
+from typing import Any, Literal, Self, final
 
 import rpyc  # type: ignore[import-untyped]
 from loguru import logger
-
-ParameterTypes = ParamSpec("ParameterTypes")
-ReturnType = TypeVar("ReturnType")
 
 
 @final
