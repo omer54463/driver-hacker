@@ -10,8 +10,8 @@ from loguru import logger
 from driver_hacker.emulator.emulator import Emulator
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.get_drivers import get_drivers
-from driver_hacker.image.ida_cache import ImageCache
 from driver_hacker.image.image import Image
+from driver_hacker.image.image_cache import ImageCache
 
 if TYPE_CHECKING:
     from loguru import Record

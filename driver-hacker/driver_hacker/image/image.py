@@ -20,7 +20,7 @@ class Image:
 
     __DEFAULT_PORT = 9000
     __DATABASE_SUFFIX = ".i64"
-    __SERVER = Path(__file__).parent / "ida_server.py"
+    __SERVER = Path(__file__).parent / "image_server.py"
     __IDAT = Path("C:\\Program Files\\IDA Professional 9.0\\idat64.exe")
 
     __MODULE_NAMES = MappingProxyType(

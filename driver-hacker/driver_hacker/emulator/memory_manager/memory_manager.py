@@ -31,6 +31,28 @@ class MemoryManager:
     def endian(self) -> Literal["big", "little"]:
         return "little"
 
+    @property
+    def free_blocks(self) -> Generator[FreeBlock]:
+        current = self.__start
+        for block in self.allocated_blocks:
+            if block.start > current:
+                yield FreeBlock(current, block.start)
+
+            current = max(current, block.end)
+
+        if current < self.__end:
+            yield FreeBlock(current, self.__end)
+
+    @property
+    def allocated_blocks(self) -> Generator[AllocatedBlock]:
+        for first, last, permissions in self.__uc.mem_regions():
+            if self.__start <= first < self.__end or self.__start <= last < self.__end:
+                yield AllocatedBlock(
+                    max(first, self.__start),
+                    min(last + 1, self.__end),
+                    Permission.from_uc(permissions),
+                )
+
     def map(self, start: int, size: int, permissions: Permission = Permission.ALL) -> None:
         logger.trace("map(start={:#x}, size={:#x}, permissions={})", start, size, permissions)
 
@@ -71,28 +93,6 @@ class MemoryManager:
 
     def is_unmapped(self, address: int) -> bool:
         return any(block.start <= address < block.end for block in self.free_blocks)
-
-    @property
-    def free_blocks(self) -> Generator[FreeBlock]:
-        current = self.__start
-        for block in self.allocated_blocks:
-            if block.start > current:
-                yield FreeBlock(current, block.start)
-
-            current = max(current, block.end)
-
-        if current < self.__end:
-            yield FreeBlock(current, self.__end)
-
-    @property
-    def allocated_blocks(self) -> Generator[AllocatedBlock]:
-        for first, last, permissions in self.__uc.mem_regions():
-            if self.__start <= first < self.__end or self.__start <= last < self.__end:
-                yield AllocatedBlock(
-                    max(first, self.__start),
-                    min(last + 1, self.__end),
-                    Permission.from_uc(permissions),
-                )
 
     def write(self, address: int, data: bytes) -> None:
         self.__uc.mem_write(address, data)

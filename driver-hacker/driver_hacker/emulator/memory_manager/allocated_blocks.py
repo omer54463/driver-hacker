@@ -31,4 +31,4 @@ class AllocatedBlock:
         return self.__permissions
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.__start:#x}, {self.__end:#x}, {self.permissions})"
+        return f"{type(self).__name__}({self.__start:#x}, {self.__end:#x}, {self.__permissions})"
