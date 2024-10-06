@@ -151,22 +151,63 @@ class Emulator:
             case never:
                 assert_never(never)
 
-    def stack_trace(self, level: int | str) -> None:
-        value = self.register.get("rip")
-        if isinstance(name := self.__try_get_name(value), str):
-            logger.log(level, "{:#018x} [{}]", value, name)
+    def disassembly(self, level: int | str, size_backwards: int = 3, size_forwards: int = 3) -> None:
+        current_address = self.register.get("rip")
 
-        start_address = self.register.get("rsp")
-        address = start_address
-        while self.memory.is_mapped(address) and address - start_address < self.stack_size:
-            value = self.memory.read_pointer(address)
-            if isinstance(name := self.__try_get_name(value), str):
-                logger.log(level, "{:#018x} [{}]", value, name)
-            address += self.memory.pointer_size
+        for image in self.__images.values():
+            if image.segment.getseg(current_address) is not None:
+                break
+
+        else:
+            return
+
+        first_address = current_address
+        for _ in range(size_backwards):
+            previous_address: int = image.ua.decode_prev_insn(image.ua.insn_t(), first_address)
+            if previous_address == image.api.BADADDR:
+                break
+            first_address = previous_address
+
+        logger.error("Disassembly:")
+
+        address = first_address
+        for _ in range(size_backwards + 1 + size_forwards):
+            instruction_size: int = image.ua.decode_insn(image.ua.insn_t(), address)
+            if instruction_size == 0:
+                break
+
+            mark = ">" if address == current_address else " "
+            disassembly = image.lines.generate_disasm_line(address, image.lines.GENDSM_REMOVE_TAGS)
+            logger.log(level, "{} {:#018x} {}", mark, address, disassembly)
+            address += instruction_size
+
+    def stack_trace(self, level: int | str, size: int | None = None) -> None:
+        current_address = self.register.get("rip")
+
+        addresses = [current_address]
+        first_stack_address = self.register.get("rsp")
+        stack_address = first_stack_address
+        while self.memory.is_mapped(stack_address) and stack_address - first_stack_address < self.stack_size:
+            addresses.append(self.memory.read_pointer(stack_address))
+            stack_address += self.memory.pointer_size
+
+        logger.error("Stack trace:")
+
+        stack_trace_entry_count = 0
+        for address in addresses:
+            mark = ">" if address == current_address else " "
+            stack_trace_entry = self.__try_get_stack_trace_entry(address)
+            if stack_trace_entry is not None:
+                logger.log(level, "{} {:#018x} [{}]", mark, address, stack_trace_entry)
+                stack_trace_entry_count += 1
+
+            if size is not None and stack_trace_entry_count == size:
+                break
 
     def start(self, address: int) -> None:
         stack = self.memory.allocate(self.stack_size * 2, Permission.READ_WRITE)
-        self.register.set("rsp", stack + self.__stack_size)
+        self.register.set("rsp", stack + self.stack_size)
+
         self.uc.emu_start(address, 0)
 
     def __map_sections(self, image: Image) -> None:
@@ -244,7 +285,7 @@ class Emulator:
             case never:
                 assert_never(never)
 
-    def __try_get_name(self, address: int) -> str | None:
+    def __try_get_stack_trace_entry(self, address: int) -> str | None:
         for image_name, image in self.__images.items():
             function: func_t | None = image.funcs.get_func(address)
             if function is None:

@@ -107,7 +107,8 @@ def analyze(ntoskrnl: Image, driver: Image) -> None:
         emulator.start(emulator.get_export(driver.path.stem, "DriverEntry"))
 
     except Exception as exception:
-        logger.error(exception)
+        logger.error("Error: {}", exception)
+        emulator.disassembly("ERROR")
         emulator.stack_trace("ERROR")
 
 
