@@ -21,18 +21,22 @@ class Emulator:
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
 
+    __kuser_shared_data: bytes
     __stack_size: int
 
     __images: dict[str, Image]
     __overrides: dict[tuple[str, int | str], Callable[[Self], int | None]]
     __fallbacks: dict[tuple[str, int | str], Callable[[Self], int | None]]
 
-    def __init__(self, stack_size: int, memory_start: int, memory_end: int) -> None:
+    __KUSER_SHARED_DATA_ADDRESS = 0xFFFFF78000000000
+
+    def __init__(self, kuser_shared_data: bytes, stack_size: int, memory_start: int, memory_end: int) -> None:
         self.__uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
 
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
 
+        self.__kuser_shared_data = kuser_shared_data
         self.__stack_size = stack_size
 
         self.__images = {}
@@ -204,6 +208,9 @@ class Emulator:
     def start(self, address: int) -> None:
         stack = self.memory.allocate(self.stack_size * 2, Permission.READ_WRITE)
         self.register.set("rsp", stack + self.stack_size)
+
+        self.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, self.memory.page_size, Permission.READ)
+        self.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, self.__kuser_shared_data)
 
         self.uc.emu_start(address, 0)
 

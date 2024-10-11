@@ -18,6 +18,8 @@ __SYSTEM_ROOT_PREFIX = Path("\\systemroot")
 
 __GHOST_DUMP_DRIVE_NAME_PATTERN = compile(r"^dump_.*\.sys$", IGNORECASE)
 
+__KUSER_SHARED_DATA_ADDRESS = 0x7FFE0000
+
 
 @final
 class _NtStatus(IntEnum):
@@ -65,6 +67,10 @@ class _RtlProcessModuleInformation(ctypes.Structure):
         ("offset_to_file_name", ctypes.wintypes.USHORT),
         ("full_path_name", ctypes.wintypes.CHAR * FULL_PATH_NAME_LENGTH),
     )
+
+
+def get_kuser_shared_data() -> bytes:
+    return bytes(ctypes.cast(__KUSER_SHARED_DATA_ADDRESS, ctypes.POINTER(ctypes.c_char * 0x1000)).contents)
 
 
 def get_drivers() -> Mapping[str, Path]:
