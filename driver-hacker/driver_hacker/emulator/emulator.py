@@ -134,6 +134,8 @@ class Emulator:
         return address
 
     def disassembly(self, level: int | str) -> None:
+        logger.error("Disassembly:")
+
         address = self.register.get("rip")
         current_address = address
         image = self.__get_image(address)
@@ -143,8 +145,6 @@ class Emulator:
             if previous_address == image.api.BADADDR:
                 break
             current_address = previous_address
-
-        logger.error("Disassembly:")
 
         for _ in range(self.__DISASSEMBLY_SIZE):
             instruction_size: int = image.ua.decode_insn(image.ua.insn_t(), current_address)
