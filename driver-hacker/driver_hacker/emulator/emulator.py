@@ -27,8 +27,8 @@ class Emulator:
     __stack_size: int
 
     __images: dict[str, Image]
-    __overrides: dict[tuple[str, int | str], Callable[[Self], int | None]]
-    __fallbacks: dict[tuple[str, int | str], Callable[[Self], int | None]]
+    __import_overrides: dict[tuple[str, int | str], Callable[[Self], int | None]]
+    __import_fallbacks: dict[tuple[str, int | str], Callable[[Self], int | None]]
 
     __DISASSEMBLY_SIZE = 7
     __KUSER_SHARED_DATA_ADDRESS = 0xFFFFF78000000000
@@ -43,8 +43,8 @@ class Emulator:
         self.__stack_size = stack_size
 
         self.__images = {}
-        self.__overrides = {}
-        self.__fallbacks = {}
+        self.__import_overrides = {}
+        self.__import_fallbacks = {}
 
     @property
     def uc(self) -> unicorn.Uc:
@@ -67,11 +67,21 @@ class Emulator:
         self.__add_import_hook(image)
         self.__images[image.path.stem] = image
 
-    def add_override(self, image_name: str, identifier: int | str, override: Callable[[Self], int | None]) -> None:
-        self.__overrides[(image_name, identifier)] = override
+    def add_import_override(
+        self,
+        image_name: str,
+        identifier: int | str,
+        override: Callable[[Self], int | None],
+    ) -> None:
+        self.__import_overrides[(image_name, identifier)] = override
 
-    def add_fallback(self, image_name: str, identifier: int | str, fallback: Callable[[Self], int | None]) -> None:
-        self.__fallbacks[(image_name, identifier)] = fallback
+    def add_import_fallback(
+        self,
+        image_name: str,
+        identifier: int | str,
+        fallback: Callable[[Self], int | None],
+    ) -> None:
+        self.__import_fallbacks[(image_name, identifier)] = fallback
 
     def get_import(self, source_image_name: str, image_name: str, identifier: int | str) -> int:
         address: int | None = None
@@ -236,8 +246,8 @@ class Emulator:
             image.nalt.enum_import_names(index, __callback)
 
     def __import_hook(self, _uc: unicorn.Uc, _address: int, _size: int, target: tuple[str, int | str]) -> None:
-        if target in self.__overrides:
-            self.__run_callback(self.__overrides[target])
+        if target in self.__import_overrides:
+            self.__run_callback(self.__import_overrides[target])
             return
 
         with suppress(ValueError):
@@ -245,8 +255,8 @@ class Emulator:
             self.register.set("rip", address)
             return
 
-        if target in self.__fallbacks:
-            self.__run_callback(self.__fallbacks[target])
+        if target in self.__import_fallbacks:
+            self.__run_callback(self.__import_fallbacks[target])
             return
 
         image_name, identifier = target

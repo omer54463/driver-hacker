@@ -107,14 +107,14 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
     emulator.add_image(ntoskrnl)
     emulator.add_image(driver)
 
-    emulator.add_override("ntoskrnl", "EtwRegister", lambda _: 0)
-    emulator.add_override("ntoskrnl", "ExInitializeResourceLite", lambda _: 0)
+    emulator.add_import_override("ntoskrnl", "EtwRegister", lambda _: 0)
+    emulator.add_import_override("ntoskrnl", "ExInitializeResourceLite", lambda _: 0)
 
-    emulator.add_override("ntoskrnl", "ExAllocatePool2", __ex_allocate_pool)
-    emulator.add_override("ntoskrnl", "ExAllocatePoolWithTag", __ex_allocate_pool)
+    emulator.add_import_override("ntoskrnl", "ExAllocatePool2", __ex_allocate_pool)
+    emulator.add_import_override("ntoskrnl", "ExAllocatePoolWithTag", __ex_allocate_pool)
 
-    emulator.add_override("ntoskrnl", "IoCreateDevice", __io_create_device)
-    emulator.add_override("ntoskrnl", "IoCreateSymbolicLink", __io_create_symbolic_link)
+    emulator.add_import_override("ntoskrnl", "IoCreateDevice", __io_create_device)
+    emulator.add_import_override("ntoskrnl", "IoCreateSymbolicLink", __io_create_symbolic_link)
 
     driver_object = emulator.memory.allocate(emulator.memory.page_size, Permission.READ_WRITE)
     emulator.register.set("rcx", driver_object)
