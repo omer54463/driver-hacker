@@ -124,8 +124,8 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
 
     except unicorn.UcError as error:
         logger.error("Error: {}", error)
-        emulator.disassembly("ERROR")
-        emulator.stack_trace("ERROR")
+        emulator.disassembly(level="ERROR")
+        emulator.stack_trace(level="ERROR")
 
 
 @logger.catch

@@ -133,7 +133,7 @@ class Emulator:
 
         return address
 
-    def disassembly(self, level: int | str) -> None:
+    def disassembly(self, *, level: int | str = "INFO") -> None:
         logger.error("Disassembly:")
 
         address = self.register.get("rip")
@@ -156,7 +156,7 @@ class Emulator:
             logger.log(level, "{} {:#018x} {}", mark, current_address, disassembly)
             current_address += instruction_size
 
-    def stack_trace(self, level: int | str) -> None:
+    def stack_trace(self, *, level: int | str = "INFO") -> None:
         logger.error("Stack trace:")
 
         current_stack_address = self.register.get("rsp") - self.memory.pointer_size
