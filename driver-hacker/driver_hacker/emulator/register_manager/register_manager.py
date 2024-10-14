@@ -3,7 +3,12 @@ from typing import cast, final
 import unicorn  # type: ignore[import-untyped]
 
 from driver_hacker.emulator.register_manager.floating_point_register_wrapper import FloatingPointRegisterWrapper
-from driver_hacker.emulator.register_manager.memory_management_register_wrapper import MemoryManagementRegisterWrapper
+from driver_hacker.emulator.register_manager.global_memory_management_register_wrapper import (
+    GlobalMemoryManagementRegisterWrapper,
+)
+from driver_hacker.emulator.register_manager.local_memory_management_register_wrapper import (
+    LocalMemoryManagementRegisterWrapper,
+)
 
 
 @final
@@ -1782,32 +1787,32 @@ class RegisterManager:
         self.__uc.reg_write(unicorn.x86_const.UC_X86_REG_R15W, value)
 
     @property
-    def idtr(self) -> MemoryManagementRegisterWrapper:
-        return MemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_IDTR)
+    def idtr(self) -> GlobalMemoryManagementRegisterWrapper:
+        return GlobalMemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_IDTR)
 
     @idtr.setter
-    def idtr(self, value: tuple[int, int, int, int]) -> None:
-        self.__uc.reg_write(unicorn.x86_const.UC_X86_REG_IDTR, value)
+    def idtr(self, value: tuple[int, int]) -> None:
+        self.__uc.reg_write(unicorn.x86_const.UC_X86_REG_IDTR, (0, *value, 0))
 
     @property
-    def gdtr(self) -> MemoryManagementRegisterWrapper:
-        return MemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_GDTR)
+    def gdtr(self) -> GlobalMemoryManagementRegisterWrapper:
+        return GlobalMemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_GDTR)
 
     @gdtr.setter
-    def gdtr(self, value: tuple[int, int, int, int]) -> None:
-        self.__uc.reg_write(unicorn.x86_const.UC_X86_REG_GDTR, value)
+    def gdtr(self, value: tuple[int, int]) -> None:
+        self.__uc.reg_write(unicorn.x86_const.UC_X86_REG_GDTR, (0, *value, 0))
 
     @property
-    def ldtr(self) -> MemoryManagementRegisterWrapper:
-        return MemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_LDTR)
+    def ldtr(self) -> LocalMemoryManagementRegisterWrapper:
+        return LocalMemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_LDTR)
 
     @ldtr.setter
     def ldtr(self, value: tuple[int, int, int, int]) -> None:
         self.__uc.reg_write(unicorn.x86_const.UC_X86_REG_LDTR, value)
 
     @property
-    def tr(self) -> MemoryManagementRegisterWrapper:
-        return MemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_TR)
+    def tr(self) -> LocalMemoryManagementRegisterWrapper:
+        return LocalMemoryManagementRegisterWrapper(self.__uc, unicorn.x86_const.UC_X86_REG_TR)
 
     @tr.setter
     def tr(self, value: tuple[int, int, int, int]) -> None:

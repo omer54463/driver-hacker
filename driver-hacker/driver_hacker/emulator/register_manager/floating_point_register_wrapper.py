@@ -16,16 +16,16 @@ class FloatingPointRegisterWrapper:
         return self.__get_value()[0]
 
     @mantissa.setter
-    def mantissa(self, value: int) -> None:
-        self.__set_value((value, self.exponent))
+    def mantissa(self, mantissa: int) -> None:
+        self.__set_value((mantissa, self.exponent))
 
     @property
     def exponent(self) -> int:
         return self.__get_value()[1]
 
     @exponent.setter
-    def exponent(self, value: int) -> None:
-        self.__set_value((self.mantissa, value))
+    def exponent(self, exponent: int) -> None:
+        self.__set_value((self.mantissa, exponent))
 
     def __get_value(self) -> tuple[int, int]:
         return cast(tuple[int, int], self.__uc.reg_read(self.__id))

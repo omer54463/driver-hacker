@@ -3,7 +3,7 @@ from typing import cast
 import unicorn  # type: ignore[import-untyped]
 
 
-class MemoryManagementRegisterWrapper:
+class LocalMemoryManagementRegisterWrapper:
     __uc: unicorn.Uc
     __id: int
 
@@ -16,32 +16,32 @@ class MemoryManagementRegisterWrapper:
         return self.__get_value()[0]
 
     @selector.setter
-    def selector(self, value: int) -> None:
-        self.__set_value((value, self.base, self.limit, self.flags))
+    def selector(self, selector: int) -> None:
+        self.__set_value((selector, self.base, self.limit, self.flags))
 
     @property
     def base(self) -> int:
         return self.__get_value()[1]
 
     @base.setter
-    def base(self, value: int) -> None:
-        self.__set_value((self.selector, value, self.limit, self.flags))
+    def base(self, base: int) -> None:
+        self.__set_value((self.selector, base, self.limit, self.flags))
 
     @property
     def limit(self) -> int:
         return self.__get_value()[1]
 
     @limit.setter
-    def limit(self, value: int) -> None:
-        self.__set_value((self.selector, self.base, value, self.flags))
+    def limit(self, limit: int) -> None:
+        self.__set_value((self.selector, self.base, limit, self.flags))
 
     @property
     def flags(self) -> int:
         return self.__get_value()[1]
 
     @flags.setter
-    def flags(self, value: int) -> None:
-        self.__set_value((self.selector, self.base, self.limit, value))
+    def flags(self, flags: int) -> None:
+        self.__set_value((self.selector, self.base, self.limit, flags))
 
     def __get_value(self) -> tuple[int, int, int, int]:
         return cast(tuple[int, int, int, int], self.__uc.reg_read(self.__id))
