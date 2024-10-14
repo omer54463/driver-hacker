@@ -1,8 +1,9 @@
-from typing import cast
+from typing import final
 
 import unicorn  # type: ignore[import-untyped]
 
 
+@final
 class FloatingPointRegisterWrapper:
     __uc: unicorn.Uc
     __id: int
@@ -28,7 +29,8 @@ class FloatingPointRegisterWrapper:
         self.__set_value((self.mantissa, exponent))
 
     def __get_value(self) -> tuple[int, int]:
-        return cast(tuple[int, int], self.__uc.reg_read(self.__id))
+        value: tuple[int, int] = self.__uc.reg_read(self.__id)
+        return value
 
     def __set_value(self, value: tuple[int, int]) -> None:
         self.__uc.reg_write(self.__id, value)

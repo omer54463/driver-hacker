@@ -1,10 +1,13 @@
-from collections.abc import Callable
+from contextlib import suppress
+from functools import partial
 from math import ceil
-from typing import TYPE_CHECKING, Self, assert_never, final
+from typing import TYPE_CHECKING, assert_never, final
 
 import unicorn  # type: ignore[import-untyped]
 from loguru import logger
 
+from driver_hacker.emulator.emulator_callback import EmulatorCallback
+from driver_hacker.emulator.emulator_callback_result import EmulatorCallbackResult
 from driver_hacker.emulator.memory_manager.memory_manager import MemoryManager
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.emulator.register_manager.register_manager import RegisterManager
@@ -18,30 +21,43 @@ if TYPE_CHECKING:
 @final
 class Emulator:
     __uc: unicorn.Uc
-
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
-
-    __kuser_shared_data: bytes
-    __stack_size: int
-
     __images: dict[str, Image]
-    __resolved: dict[tuple[str, int | str], Callable[[Self], int | None]]
 
     __DISASSEMBLY_SIZE = 7
     __KUSER_SHARED_DATA_ADDRESS = 0xFFFFF78000000000
 
-    def __init__(self, kuser_shared_data: bytes, stack_size: int, memory_start: int, memory_end: int) -> None:
+    def __init__(
+        self,
+        stack_size: int,
+        memory_start: int,
+        memory_end: int,
+        kuser_shared_data: bytes,
+        images: list[Image],
+        import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        default_import_fallback: EmulatorCallback | None,
+        function_callbacks: dict[tuple[Image, str | int], EmulatorCallback],
+    ) -> None:
         self.__uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
-
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
+        self.__images = {image.stem: image for image in images}
 
-        self.__kuser_shared_data = kuser_shared_data
-        self.__stack_size = stack_size
+        self.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, self.memory.page_size, Permission.READ)
+        self.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, kuser_shared_data)
 
-        self.__images = {}
-        self.__resolved = {}
+        for image in images:
+            self.__map_image_sections(image)
+
+        for image in images:
+            self.__resolve_image_imports(image, import_fallbacks, default_import_fallback)
+
+        for (image, function_identifier), callback in function_callbacks.items():
+            self.__add_callback(image, function_identifier, callback)
+
+        stack = self.memory.allocate(stack_size, Permission.READ_WRITE)
+        self.register.rsp = stack + stack_size // 2
 
     @property
     def uc(self) -> unicorn.Uc:
@@ -55,91 +71,17 @@ class Emulator:
     def memory(self) -> MemoryManager:
         return self.__memory_manager
 
-    @property
-    def stack_size(self) -> int:
-        return self.__stack_size
-
-    def add(self, image: Image) -> None:
-        self.__map_sections(image)
-        self.__add_import_hook(image)
-        self.__images[image.path.stem] = image
-
-    def resolve(self, image_name: str, identifier: int | str, callback: Callable[[Self], int | None]) -> None:
-        self.__resolved[(image_name, identifier)] = callback
-
-    def override(self, image_name: str, identifier: int | str, callback: Callable[[Self], int | None]) -> None:
-        raise NotImplementedError
-
-    def get_import(self, source_image_name: str, image_name: str, identifier: int | str) -> int:
-        address: int | None = None
-
-        def __callback(import_address: int, target_name: str | None, target_ordinal: int) -> bool:
-            nonlocal address
-
-            match identifier:
-                case str() as name:
-                    if target_name == name:
-                        address = import_address
-                        return False
-
-                    return True
-
-                case int() as ordinal:
-                    if target_ordinal == ordinal:
-                        address = import_address
-                        return False
-
-                    return True
-
-                case never:
-                    assert_never(never)
-
-            image = self.__images[source_image_name]
-            index = self.__get_import_index(image, image_name)
-            image.nalt.enum_import_names(index, __callback)
-
-            if address is None:
-                message = f"Cannot find import `{identifier}` of image `{image_name}` in image `{source_image_name}`"
-                raise ValueError(message)
-
-            return address
-
-        message = f"Image `{source_image_name}` does not import symbols from image `{image_name}`"
-        raise ValueError(message)
-
-    def get_export(self, image_name: str, identifier: int | str) -> int:
-        if image_name not in self.__images:
-            message = f"Image `{image_name}` is not mapped"
-            raise ValueError(message)
-
-        image = self.__images[image_name]
-
-        match identifier:
-            case str() as name:
-                address: int = image.name.get_name_ea(image.api.BADADDR, name)
-
-            case int() as ordinal:
-                address = image.entry.get_entry(ordinal)
-
-            case never:
-                assert_never(never)
-
-        if address == image.api.BADADDR:
-            message = f"Cannot find export `{identifier}` of image `{image_name}`"
-            raise ValueError(message)
-
-        return address
-
     def disassembly(self, *, level: int | str = "TRACE") -> None:
-        logger.error("Disassembly:")
+        logger.log(level, "Disassembly:")
 
         current_address = self.register.rip
-        image = self.__get_image(current_address)
+        image = self.__get_image_by_address(current_address)
 
         for _ in range(ceil(self.__DISASSEMBLY_SIZE / 2) - 1):
             previous_address: int = image.ua.decode_prev_insn(image.ua.insn_t(), current_address)
             if previous_address == image.api.BADADDR:
                 break
+
             current_address = previous_address
 
         for _ in range(self.__DISASSEMBLY_SIZE):
@@ -153,40 +95,65 @@ class Emulator:
             current_address += instruction_size
 
     def stack_trace(self, *, level: int | str = "TRACE") -> None:
-        logger.error("Stack trace:")
+        logger.log(level, "Stack trace:")
 
         current_stack_address = self.register.rsp - self.memory.pointer_size
         current_address = self.register.rip
 
-        while True:
-            try:
-                image = self.__get_image(current_address)
-
-            except ValueError:
-                break
-
+        while current_address != 0:
+            image = self.__get_image_by_address(current_address)
             function: func_t | None = image.funcs.get_func(current_address)
             if function is None:
                 break
 
             mark = ">" if current_address == self.register.rip else " "
             function_name: str = image.funcs.get_func_name(function.start_ea)
-            entry = self.__format_stack_trace_entry(image.path.stem, function_name, function.start_ea, current_address)
+            entry = self.__format_stack_trace_entry(image.stem, function_name, function.start_ea, current_address)
             logger.log(level, "{} {:#018x} {}", mark, current_address, entry)
 
             current_stack_address += image.frame.get_frame_size(function)
             current_address = self.memory.read_pointer(current_stack_address)
 
+    def get(self, image: Image | str) -> Image:
+        if isinstance(image, Image):
+            return image
+
+        try:
+            return self.__images[image]
+
+        except KeyError as key_error:
+            message = f"Image `{image}` does not exist"
+            raise ValueError(message) from key_error
+
+    def resolve(self, image: Image | str, symbol_identifier: str | int) -> int:
+        image = self.get(image) if isinstance(image, str) else image
+
+        match symbol_identifier:
+            case str() as symbol_name:
+                address: int = image.name.get_name_ea(image.api.BADADDR, symbol_name)
+                if address == image.api.BADADDR:
+                    for index in range(image.entry.get_entry_qty()):
+                        export_ordinal: int = image.entry.get_entry_ordinal(index)
+                        export_name: str = image.entry.get_entry_name(export_ordinal)
+                        if export_name == symbol_name:
+                            address = image.entry.get_entry(export_ordinal)
+
+            case int() as export_ordinal:
+                address = image.entry.get_entry(export_ordinal)
+
+            case never:
+                assert_never(never)
+
+        if address == image.api.BADADDR:
+            message = f"Symbol `{symbol_name}` of image `{image.stem}` does not exist"
+            raise ValueError(message)
+
+        return address
+
     def start(self, address: int) -> None:
-        stack = self.memory.allocate(self.stack_size * 2, Permission.READ_WRITE)
-        self.register.rsp = stack + self.stack_size
-
-        self.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, self.memory.page_size, Permission.READ)
-        self.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, self.__kuser_shared_data)
-
         self.uc.emu_start(address, 0)
 
-    def __map_sections(self, image: Image) -> None:
+    def __map_image_sections(self, image: Image) -> None:
         image_start: int = image.nalt.get_imagebase()
         image_end: int = max(image.segment.getnseg(index).end_ea for index in range(image.segment.get_segm_qty()))
         image_size = image_end - image_start
@@ -195,7 +162,7 @@ class Emulator:
         self.memory.unmap(address, image_size)
         image.segment.rebase_program(address - image_start, image.segment.MSF_FIXONCE)
 
-        logger.info("Adding image `{}` at address {:#x}", image.path.stem, address)
+        logger.info("Adding image `{}` at address {:#x}", image.stem, address)
 
         segment: segment_t = image.segment.get_first_seg()
         while segment is not None:
@@ -208,76 +175,99 @@ class Emulator:
 
             segment = image.segment.get_next_seg(segment.start_ea)
 
-    def __add_import_hook(self, image: Image) -> None:
+    def __resolve_image_imports(
+        self,
+        image: Image,
+        import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        default_import_fallback: EmulatorCallback | None,
+    ) -> None:
         for index in range(image.nalt.get_import_module_qty()):
-            target_image_name: str = image.nalt.get_import_module_name(index)
+            source_image_name: str = image.nalt.get_import_module_name(index)
 
-            def __callback(import_address: int, target_name: str | None, target_ordinal: int) -> bool:
-                target = (
-                    (target_image_name, target_ordinal) if target_name is None else (target_image_name, target_name)
+            source_image = None
+            with suppress(ValueError):
+                source_image = self.get(source_image_name)
+
+            if source_image is not None:
+                image.nalt.enum_import_names(
+                    index,
+                    partial(
+                        self.__resolve_image_imports_callback,
+                        image,
+                        source_image,
+                        import_fallbacks,
+                        default_import_fallback,
+                    ),
                 )
-                hook_address = self.memory.allocate(self.memory.page_size, Permission.READ_EXECUTE)
-                self.uc.hook_add(
-                    unicorn.UC_HOOK_CODE,
-                    self.__import_hook,
-                    target,
-                    hook_address,
-                    hook_address + self.memory.page_size - 1,
-                )
-                self.memory.write_pointer(import_address, hook_address)
-                return True
+                continue
 
-            image.nalt.enum_import_names(index, __callback)
+            logger.warning(
+                "Image `{}` imports symbols from image `{}`, but such image doesn't exist",
+                image.stem,
+                source_image_name,
+            )
 
-    def __import_hook(self, _uc: unicorn.Uc, _address: int, _size: int, target: tuple[str, int | str]) -> None:
-        try:
-            address = self.get_export(*target)
+    def __resolve_image_imports_callback(
+        self,
+        image: Image,
+        source_image: Image,
+        import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        default_import_fallback: EmulatorCallback | None,
+        address: int,
+        name: str | None,
+        ordinal: int,
+    ) -> bool:
+        source_address = None
+        with suppress(ValueError):
+            source_address = self.resolve(source_image, name or ordinal)
 
-        except ValueError:
-            address = None
+        if source_address is not None:
+            self.memory.write_pointer(address, source_address)
+            return True
 
-        if address is not None:
-            self.register.rip = address
-            return
+        import_callback = import_fallbacks.get((source_image, name or ordinal), default_import_fallback)
+        if import_callback is not None:
+            hook_address = self.memory.allocate(self.memory.page_size, Permission.READ_EXECUTE)
+            self.uc.hook_add(
+                unicorn.UC_HOOK_CODE,
+                lambda *_: self.__run_callback(import_callback),
+                begin=hook_address,
+                end=hook_address + 1,
+            )
+            self.memory.write_pointer(address, hook_address)
+            return True
 
-        if target in self.__resolved:
-            self.__run_callback(self.__resolved[target])
-            return
+        logger.warning(
+            "Image `{}` imports symbol {} from image `{}`, but such symbol doesn't exist",
+            image.stem,
+            f"`{name}`" or f"#{ordinal}",
+            source_image.stem,
+        )
+        return True
 
-        image_name, identifier = target
-        message = f"Cannot find implementation for import `{identifier}` of image `{image_name}`"
-        raise RuntimeError(message)
+    def __add_callback(self, image: Image, function_identifier: str | int, callback: EmulatorCallback) -> None:
+        address = self.resolve(image, function_identifier)
+        self.uc.hook_add(
+            unicorn.UC_HOOK_CODE,
+            lambda *_: self.__run_callback(callback),
+            begin=address,
+            end=address + 1,
+        )
 
-    def __run_callback(self, callback: Callable[[Self], int | None]) -> None:
-        try:
-            return_value = callback(self)
+    def __run_callback(self, callback: EmulatorCallback) -> None:
+        match callback(self):
+            case EmulatorCallbackResult.CONTINUE:
+                pass
 
-        except StopIteration:
-            self.uc.emu_stop()
-            return
+            case EmulatorCallbackResult.RETURN:
+                self.register.rip = self.memory.read_pointer(self.register.rsp)
+                self.register.rsp = self.register.rsp + self.memory.pointer_size
 
-        if isinstance(return_value, int):
-            self.register.rax = return_value
+            case EmulatorCallbackResult.STOP:
+                self.uc.emu_stop()
 
-        self.register.rip = self.memory.read_pointer(self.register.rsp)
-        self.register.rsp = self.register.rsp + self.memory.pointer_size
-
-    def __get_import_index(self, image: Image, image_name: str) -> int:
-        for index in range(image.nalt.get_import_module_qty()):
-            target_image_name: str = image.nalt.get_import_module_name(index)
-            if target_image_name == image_name:
-                return index
-
-        message = f"Image `{image.path.stem}` does not import symbols from image `{image_name}`"
-        raise ValueError(message)
-
-    def __get_image(self, address: int) -> Image:
-        for image in self.__images.values():
-            if image.segment.getseg(address) is not None:
-                return image
-
-        message = f"Address {address:#x} is not a part of an image"
-        raise ValueError(message)
+            case never:
+                assert_never(never)
 
     @staticmethod
     def __format_stack_trace_entry(
@@ -295,3 +285,11 @@ class Emulator:
             return f"{image_name}!{function_name}"
 
         return f"{image_name}!{function_name}+{distance:#x}"
+
+    def __get_image_by_address(self, address: int) -> Image:
+        for image in self.__images.values():
+            if image.segment.getseg(address) is not None:
+                return image
+
+        message = f"Address {address:#x} is not in any image"
+        raise ValueError(message)

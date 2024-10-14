@@ -100,6 +100,10 @@ class Image:
             raise
 
     @property
+    def stem(self) -> str:
+        return self.path.stem
+
+    @property
     def path(self) -> Path:
         if self.__binary is not None:
             return self.__binary

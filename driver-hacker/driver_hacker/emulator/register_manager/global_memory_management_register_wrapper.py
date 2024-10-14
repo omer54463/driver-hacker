@@ -1,8 +1,9 @@
-from typing import cast
+from typing import final
 
 import unicorn  # type: ignore[import-untyped]
 
 
+@final
 class GlobalMemoryManagementRegisterWrapper:
     __uc: unicorn.Uc
     __id: int
@@ -28,7 +29,8 @@ class GlobalMemoryManagementRegisterWrapper:
         self.__set_value((self.base, limit))
 
     def __get_value(self) -> tuple[int, int]:
-        return cast(tuple[int, int, int, int], self.__uc.reg_read(self.__id))[1:3]
+        value: tuple[int, int, int, int] = self.__uc.reg_read(self.__id)
+        return value[1:3]
 
     def __set_value(self, value: tuple[int, int]) -> None:
         self.__uc.reg_write(self.__id, (0, *value, 0))

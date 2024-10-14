@@ -10,16 +10,14 @@ from loguru import logger
 
 from driver_hacker import native
 from driver_hacker.emulator.emulator import Emulator
+from driver_hacker.emulator.emulator_builder import EmulatorBuilder
+from driver_hacker.emulator.emulator_callback_result import EmulatorCallbackResult
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.image.image import Image
 from driver_hacker.image.image_cache import ImageCache
 
 if TYPE_CHECKING:
     from loguru import Record
-
-__STACK_SIZE = 0x2000
-__MEMORY_START = 0xFFFF000000000000
-__MEMORY_END = 0xFFFFFFFFFFFFFFFF
 
 
 @final
@@ -74,16 +72,28 @@ def __setup_logger(*, verbose: bool = False) -> None:
     logger.add(stderr, level="TRACE" if verbose else "INFO", format=__format_function)
 
 
-def __io_create_device(emulator: Emulator) -> int:
+def __return_zero(emulator: Emulator) -> EmulatorCallbackResult:
+    emulator.register.rax = 0
+    return EmulatorCallbackResult.RETURN
+
+
+def __allocate(emulator: Emulator) -> EmulatorCallbackResult:
+    emulator.register.rax = emulator.memory.allocate(emulator.register.rdx, Permission.READ_WRITE)
+    return EmulatorCallbackResult.RETURN
+
+
+def __io_create_device(emulator: Emulator) -> EmulatorCallbackResult:
     device_name_address = emulator.register.r8
     device_name_buffer = emulator.memory.read_pointer(device_name_address + 8)
     device_name = emulator.memory.read_wstring(device_name_buffer)
 
     logger.success("Device: {}", device_name)
-    return 0
+
+    emulator.register.rax = 0
+    return EmulatorCallbackResult.RETURN
 
 
-def __io_create_symbolic_link(emulator: Emulator) -> int:
+def __io_create_symbolic_link(emulator: Emulator) -> EmulatorCallbackResult:
     symbolic_link_name_address = emulator.register.rcx
     symbolic_link_name_buffer = emulator.memory.read_pointer(symbolic_link_name_address + 8)
     symbolic_link_name = emulator.memory.read_wstring(symbolic_link_name_buffer)
@@ -93,23 +103,32 @@ def __io_create_symbolic_link(emulator: Emulator) -> int:
     device_name = emulator.memory.read_wstring(device_name_buffer)
 
     logger.success("Symbolic Link: {} -> {}", symbolic_link_name, device_name)
-    return 0
+
+    emulator.register.rax = 0
+    return EmulatorCallbackResult.RETURN
 
 
 def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
-    emulator = Emulator(kuser_shared_data, __STACK_SIZE, __MEMORY_START, __MEMORY_END)
-
-    emulator.add(ntoskrnl)
-    emulator.add(driver)
-
-    emulator.override(ntoskrnl.path.stem, "IoCreateDevice", __io_create_device)
-    emulator.override(ntoskrnl.path.stem, "IoCreateSymbolicLink", __io_create_symbolic_link)
+    emulator = (
+        EmulatorBuilder()
+        .set_kuser_shared_data(kuser_shared_data)
+        .add_image(ntoskrnl)
+        .add_image(driver)
+        .add_function_callback(ntoskrnl, "EtwRegister", __return_zero)
+        .add_function_callback(ntoskrnl, "ExInitializeResourceLite", __return_zero)
+        .add_function_callback(ntoskrnl, "IoRegisterShutdownNotification", __return_zero)
+        .add_function_callback(ntoskrnl, "ExAllocatePoolWithTag", __allocate)
+        .add_function_callback(ntoskrnl, "ExAllocatePool2", __allocate)
+        .add_function_callback(ntoskrnl, "IoCreateDevice", __io_create_device)
+        .add_function_callback(ntoskrnl, "IoCreateSymbolicLink", __io_create_symbolic_link)
+        .build()
+    )
 
     driver_object = emulator.memory.allocate(emulator.memory.page_size, Permission.READ_WRITE)
     emulator.register.rcx = driver_object
 
     try:
-        emulator.start(emulator.get_export(driver.path.stem, "DriverEntry"))
+        emulator.start(emulator.resolve(driver.stem, "DriverEntry"))
 
     except unicorn.UcError as uc_error:
         logger.error("Unicorn error: {}", uc_error)
