@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from contextlib import suppress
 from functools import partial
 from math import ceil
@@ -34,24 +35,24 @@ class Emulator:
         memory_start: int,
         memory_end: int,
         kuser_shared_data: bytes,
-        images: list[Image],
-        import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        images: Mapping[str, Image],
+        import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback],
         default_import_fallback: EmulatorCallback | None,
-        function_callbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        function_callbacks: Mapping[tuple[str, str | int], EmulatorCallback],
     ) -> None:
         self.__uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
         self.__register_manager = RegisterManager(self.__uc)
         self.__memory_manager = MemoryManager(self.__uc, memory_start, memory_end)
-        self.__images = {image.stem: image for image in images}
+        self.__images = dict(images)
 
         self.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, self.memory.page_size, Permission.READ)
         self.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, kuser_shared_data)
 
-        for image in images:
-            self.__map_image_sections(image)
+        for image_name in self.__images:
+            self.__map_image_sections(image_name)
 
-        for image in images:
-            self.__resolve_image_imports(image, import_fallbacks, default_import_fallback)
+        for image_name in self.__images:
+            self.__resolve_image_imports(image_name, import_fallbacks, default_import_fallback)
 
         for (image, function_identifier), callback in function_callbacks.items():
             self.__add_callback(image, function_identifier, callback)
@@ -114,19 +115,16 @@ class Emulator:
             current_stack_address += image.frame.get_frame_size(function)
             current_address = self.memory.read_pointer(current_stack_address)
 
-    def get(self, image: Image | str) -> Image:
-        if isinstance(image, Image):
-            return image
-
+    def get(self, image_name: str) -> Image:
         try:
-            return self.__images[image]
+            return self.__images[image_name]
 
         except KeyError as key_error:
-            message = f"Image `{image}` does not exist"
+            message = f"Image `{image_name}` does not exist"
             raise ValueError(message) from key_error
 
-    def resolve(self, image: Image | str, symbol_identifier: str | int) -> int:
-        image = self.get(image) if isinstance(image, str) else image
+    def resolve(self, image_name: str, symbol_identifier: str | int) -> int:
+        image = self.get(image_name)
 
         match symbol_identifier:
             case str() as symbol_name:
@@ -145,7 +143,7 @@ class Emulator:
                 assert_never(never)
 
         if address == image.api.BADADDR:
-            message = f"Symbol `{symbol_name}` of image `{image.stem}` does not exist"
+            message = f"Symbol `{symbol_name}` of image `{image_name}` does not exist"
             raise ValueError(message)
 
         return address
@@ -153,7 +151,8 @@ class Emulator:
     def start(self, address: int) -> None:
         self.uc.emu_start(address, 0)
 
-    def __map_image_sections(self, image: Image) -> None:
+    def __map_image_sections(self, image_name: str) -> None:
+        image = self.get(image_name)
         image_start: int = image.nalt.get_imagebase()
         image_end: int = max(image.segment.getnseg(index).end_ea for index in range(image.segment.get_segm_qty()))
         image_size = image_end - image_start
@@ -177,24 +176,21 @@ class Emulator:
 
     def __resolve_image_imports(
         self,
-        image: Image,
-        import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        image_name: str,
+        import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback],
         default_import_fallback: EmulatorCallback | None,
     ) -> None:
+        image = self.get(image_name)
         for index in range(image.nalt.get_import_module_qty()):
             source_image_name: str = image.nalt.get_import_module_name(index)
 
-            source_image = None
-            with suppress(ValueError):
-                source_image = self.get(source_image_name)
-
-            if source_image is not None:
+            if source_image_name in self.__images:
                 image.nalt.enum_import_names(
                     index,
                     partial(
                         self.__resolve_image_imports_callback,
-                        image,
-                        source_image,
+                        image.stem,
+                        source_image_name,
                         import_fallbacks,
                         default_import_fallback,
                     ),
@@ -209,9 +205,9 @@ class Emulator:
 
     def __resolve_image_imports_callback(
         self,
-        image: Image,
-        source_image: Image,
-        import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback],
+        image_name: str,
+        source_image_name: str,
+        import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback],
         default_import_fallback: EmulatorCallback | None,
         address: int,
         name: str | None,
@@ -219,13 +215,13 @@ class Emulator:
     ) -> bool:
         source_address = None
         with suppress(ValueError):
-            source_address = self.resolve(source_image, name or ordinal)
+            source_address = self.resolve(source_image_name, name or ordinal)
 
         if source_address is not None:
             self.memory.write_pointer(address, source_address)
             return True
 
-        import_callback = import_fallbacks.get((source_image, name or ordinal), default_import_fallback)
+        import_callback = import_fallbacks.get((source_image_name, name or ordinal), default_import_fallback)
         if import_callback is not None:
             hook_address = self.memory.allocate(self.memory.page_size, Permission.READ_EXECUTE)
             self.uc.hook_add(
@@ -239,14 +235,14 @@ class Emulator:
 
         logger.warning(
             "Image `{}` imports symbol {} from image `{}`, but such symbol doesn't exist",
-            image.stem,
+            image_name,
             f"`{name}`" or f"#{ordinal}",
-            source_image.stem,
+            source_image_name,
         )
         return True
 
-    def __add_callback(self, image: Image, function_identifier: str | int, callback: EmulatorCallback) -> None:
-        address = self.resolve(image, function_identifier)
+    def __add_callback(self, image_name: str, function_identifier: str | int, callback: EmulatorCallback) -> None:
+        address = self.resolve(image_name, function_identifier)
         self.uc.hook_add(
             unicorn.UC_HOOK_CODE,
             lambda *_: self.__run_callback(callback),

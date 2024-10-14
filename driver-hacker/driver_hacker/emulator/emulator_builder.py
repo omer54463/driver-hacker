@@ -13,9 +13,9 @@ class EmulatorBuilder:
     __kuser_shared_data: bytes
 
     __images: list[Image]
-    __import_fallbacks: dict[tuple[Image, str | int], EmulatorCallback]
+    __import_fallbacks: dict[tuple[str, str | int], EmulatorCallback]
     __default_import_fallback: EmulatorCallback | None
-    __function_callbacks: dict[tuple[Image, str | int], EmulatorCallback]
+    __function_callbacks: dict[tuple[str, str | int], EmulatorCallback]
 
     DEFAULT_STACK_SIZE = 0x2000
     DEFAULT_MEMORY_START = 0xFFFF000000000000
@@ -50,8 +50,8 @@ class EmulatorBuilder:
         self.__images.append(image)
         return self
 
-    def add_import_fallback(self, image: Image, identifier: str | int, import_fallback: EmulatorCallback) -> Self:
-        self.__import_fallbacks[(image, identifier)] = import_fallback
+    def add_import_fallback(self, image_name: str, identifier: str | int, import_fallback: EmulatorCallback) -> Self:
+        self.__import_fallbacks[(image_name, identifier)] = import_fallback
         return self
 
     def set_default_import_fallback(self, default_import_fallback: EmulatorCallback) -> Self:
@@ -60,11 +60,11 @@ class EmulatorBuilder:
 
     def add_function_callback(
         self,
-        image: Image,
+        image_name: str,
         function_identifier: str | int,
         function_callback: EmulatorCallback,
     ) -> Self:
-        self.__function_callbacks[(image, function_identifier)] = function_callback
+        self.__function_callbacks[(image_name, function_identifier)] = function_callback
         return self
 
     def build(self) -> Emulator:
@@ -73,7 +73,7 @@ class EmulatorBuilder:
             self.__memory_start,
             self.__memory_end,
             self.__kuser_shared_data,
-            self.__images,
+            {image.stem: image for image in self.__images},
             self.__import_fallbacks,
             self.__default_import_fallback,
             self.__function_callbacks,
