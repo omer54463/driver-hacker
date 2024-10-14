@@ -1,8 +1,8 @@
-from contextlib import suppress
 from functools import cache
 from pathlib import Path
 from shutil import which
 from subprocess import DEVNULL, Popen
+from time import sleep
 from types import MappingProxyType, TracebackType
 from typing import Any, Literal, Self, final
 
@@ -166,8 +166,11 @@ class Image:
 
     def __create_connection(self) -> rpyc.Connection:
         while True:
-            with suppress(ConnectionRefusedError):
+            try:
                 return rpyc.classic.connect("localhost", self.__port)
+
+            except ConnectionRefusedError:
+                sleep(0.1)
 
     @staticmethod
     def __escape(value: str | Path) -> str:

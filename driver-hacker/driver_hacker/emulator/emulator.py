@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from contextlib import suppress
 from math import ceil
 from typing import TYPE_CHECKING, Self, assert_never, final
 
@@ -27,8 +26,7 @@ class Emulator:
     __stack_size: int
 
     __images: dict[str, Image]
-    __import_overrides: dict[tuple[str, int | str], Callable[[Self], int | None]]
-    __import_fallbacks: dict[tuple[str, int | str], Callable[[Self], int | None]]
+    __resolved: dict[tuple[str, int | str], Callable[[Self], int | None]]
 
     __DISASSEMBLY_SIZE = 7
     __KUSER_SHARED_DATA_ADDRESS = 0xFFFFF78000000000
@@ -43,8 +41,7 @@ class Emulator:
         self.__stack_size = stack_size
 
         self.__images = {}
-        self.__import_overrides = {}
-        self.__import_fallbacks = {}
+        self.__resolved = {}
 
     @property
     def uc(self) -> unicorn.Uc:
@@ -62,26 +59,16 @@ class Emulator:
     def stack_size(self) -> int:
         return self.__stack_size
 
-    def add_image(self, image: Image) -> None:
+    def add(self, image: Image) -> None:
         self.__map_sections(image)
         self.__add_import_hook(image)
         self.__images[image.path.stem] = image
 
-    def add_import_override(
-        self,
-        image_name: str,
-        identifier: int | str,
-        override: Callable[[Self], int | None],
-    ) -> None:
-        self.__import_overrides[(image_name, identifier)] = override
+    def resolve(self, image_name: str, identifier: int | str, callback: Callable[[Self], int | None]) -> None:
+        self.__resolved[(image_name, identifier)] = callback
 
-    def add_import_fallback(
-        self,
-        image_name: str,
-        identifier: int | str,
-        fallback: Callable[[Self], int | None],
-    ) -> None:
-        self.__import_fallbacks[(image_name, identifier)] = fallback
+    def override(self, image_name: str, identifier: int | str, callback: Callable[[Self], int | None]) -> None:
+        raise NotImplementedError
 
     def get_import(self, source_image_name: str, image_name: str, identifier: int | str) -> int:
         address: int | None = None
@@ -243,17 +230,18 @@ class Emulator:
             image.nalt.enum_import_names(index, __callback)
 
     def __import_hook(self, _uc: unicorn.Uc, _address: int, _size: int, target: tuple[str, int | str]) -> None:
-        if target in self.__import_overrides:
-            self.__run_callback(self.__import_overrides[target])
-            return
-
-        with suppress(ValueError):
+        try:
             address = self.get_export(*target)
+
+        except ValueError:
+            address = None
+
+        if address is not None:
             self.register.rip = address
             return
 
-        if target in self.__import_fallbacks:
-            self.__run_callback(self.__import_fallbacks[target])
+        if target in self.__resolved:
+            self.__run_callback(self.__resolved[target])
             return
 
         image_name, identifier = target
@@ -261,18 +249,18 @@ class Emulator:
         raise RuntimeError(message)
 
     def __run_callback(self, callback: Callable[[Self], int | None]) -> None:
-        value = callback(self)
-        match value:
-            case int(value):
-                self.register.rax = value
-                self.register.rip = self.memory.read_pointer(self.register.rsp)
-                self.register.rsp = self.register.rsp + self.memory.pointer_size
+        try:
+            return_value = callback(self)
 
-            case None:
-                self.uc.emu_stop()
+        except StopIteration:
+            self.uc.emu_stop()
+            return
 
-            case never:
-                assert_never(never)
+        if isinstance(return_value, int):
+            self.register.rax = return_value
+
+        self.register.rip = self.memory.read_pointer(self.register.rsp)
+        self.register.rsp = self.register.rsp + self.memory.pointer_size
 
     def __get_import_index(self, image: Image, image_name: str) -> int:
         for index in range(image.nalt.get_import_module_qty()):

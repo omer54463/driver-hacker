@@ -61,10 +61,10 @@ def __format_function(record: "Record") -> str:
         raise ValueError(message)
 
     return (
-        f"<green>{record['time']:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-        f"<level>{record['level']:<8}</level> | "
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level:<8}</level> | "
         f"<cyan>{record['name'].split('.')[0]}</cyan> - "
-        f"<level>{record['message']}</level>"
+        "<level>{message}</level>"
         "\n{exception}"
     )
 
@@ -72,11 +72,6 @@ def __format_function(record: "Record") -> str:
 def __setup_logger(*, verbose: bool = False) -> None:
     logger.remove()
     logger.add(stderr, level="TRACE" if verbose else "INFO", format=__format_function)
-
-
-def __ex_allocate_pool(emulator: Emulator) -> int:
-    number_of_bytes = emulator.register.rdx
-    return emulator.memory.allocate(number_of_bytes, Permission.READ_WRITE)
 
 
 def __io_create_device(emulator: Emulator) -> int:
@@ -104,17 +99,11 @@ def __io_create_symbolic_link(emulator: Emulator) -> int:
 def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
     emulator = Emulator(kuser_shared_data, __STACK_SIZE, __MEMORY_START, __MEMORY_END)
 
-    emulator.add_image(ntoskrnl)
-    emulator.add_image(driver)
+    emulator.add(ntoskrnl)
+    emulator.add(driver)
 
-    emulator.add_import_override("ntoskrnl", "EtwRegister", lambda _: 0)
-    emulator.add_import_override("ntoskrnl", "ExInitializeResourceLite", lambda _: 0)
-
-    emulator.add_import_override("ntoskrnl", "ExAllocatePool2", __ex_allocate_pool)
-    emulator.add_import_override("ntoskrnl", "ExAllocatePoolWithTag", __ex_allocate_pool)
-
-    emulator.add_import_override("ntoskrnl", "IoCreateDevice", __io_create_device)
-    emulator.add_import_override("ntoskrnl", "IoCreateSymbolicLink", __io_create_symbolic_link)
+    emulator.override(ntoskrnl.path.stem, "IoCreateDevice", __io_create_device)
+    emulator.override(ntoskrnl.path.stem, "IoCreateSymbolicLink", __io_create_symbolic_link)
 
     driver_object = emulator.memory.allocate(emulator.memory.page_size, Permission.READ_WRITE)
     emulator.register.rcx = driver_object
@@ -122,8 +111,8 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
     try:
         emulator.start(emulator.get_export(driver.path.stem, "DriverEntry"))
 
-    except unicorn.UcError as error:
-        logger.error("Error: {}", error)
+    except unicorn.UcError as uc_error:
+        logger.error("Unicorn error: {}", uc_error)
         emulator.disassembly(level="ERROR")
         emulator.stack_trace(level="ERROR")
 
@@ -137,7 +126,8 @@ def main() -> None:
     drivers = native.get_drivers()
 
     image_cache = ImageCache(arguments.cache)
-    ntoskrnl = image_cache.get(drivers["ntoskrnl"])
-    for driver, driver_path in drivers.items():
-        if driver != "ntoskrnl" and arguments.pattern.match(driver):
-            __analyze(kuser_shared_data, ntoskrnl, image_cache.get(driver_path))
+    with image_cache.get(drivers["ntoskrnl"]) as ntoskrnl:
+        for driver_name, driver_path in drivers.items():
+            if driver_name != "ntoskrnl" and arguments.pattern.match(driver_name):
+                with image_cache.get(driver_path) as driver:
+                    __analyze(kuser_shared_data, ntoskrnl, driver)
