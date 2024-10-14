@@ -75,12 +75,12 @@ def __setup_logger(*, verbose: bool = False) -> None:
 
 
 def __ex_allocate_pool(emulator: Emulator) -> int:
-    number_of_bytes = emulator.register.get("rdx")
+    number_of_bytes = emulator.register.rdx
     return emulator.memory.allocate(number_of_bytes, Permission.READ_WRITE)
 
 
 def __io_create_device(emulator: Emulator) -> int:
-    device_name_address = emulator.register.get("r8")
+    device_name_address = emulator.register.r8
     device_name_buffer = emulator.memory.read_pointer(device_name_address + 8)
     device_name = emulator.memory.read_wstring(device_name_buffer)
 
@@ -89,11 +89,11 @@ def __io_create_device(emulator: Emulator) -> int:
 
 
 def __io_create_symbolic_link(emulator: Emulator) -> int:
-    symbolic_link_name_address = emulator.register.get("rcx")
+    symbolic_link_name_address = emulator.register.rcx
     symbolic_link_name_buffer = emulator.memory.read_pointer(symbolic_link_name_address + 8)
     symbolic_link_name = emulator.memory.read_wstring(symbolic_link_name_buffer)
 
-    device_name_address = emulator.register.get("rdx")
+    device_name_address = emulator.register.rdx
     device_name_buffer = emulator.memory.read_pointer(device_name_address + 8)
     device_name = emulator.memory.read_wstring(device_name_buffer)
 
@@ -117,7 +117,7 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
     emulator.add_import_override("ntoskrnl", "IoCreateSymbolicLink", __io_create_symbolic_link)
 
     driver_object = emulator.memory.allocate(emulator.memory.page_size, Permission.READ_WRITE)
-    emulator.register.set("rcx", driver_object)
+    emulator.register.rcx = driver_object
 
     try:
         emulator.start(emulator.get_export(driver.path.stem, "DriverEntry"))

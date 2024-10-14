@@ -146,9 +146,8 @@ class Emulator:
     def disassembly(self, *, level: int | str = "INFO") -> None:
         logger.error("Disassembly:")
 
-        address = self.register.get("rip")
-        current_address = address
-        image = self.__get_image(address)
+        current_address = self.register.rip
+        image = self.__get_image(current_address)
 
         for _ in range(ceil(self.__DISASSEMBLY_SIZE / 2) - 1):
             previous_address: int = image.ua.decode_prev_insn(image.ua.insn_t(), current_address)
@@ -161,7 +160,7 @@ class Emulator:
             if instruction_size == 0:
                 break
 
-            mark = ">" if current_address == address else " "
+            mark = ">" if current_address == self.register.rip else " "
             disassembly = image.lines.generate_disasm_line(current_address, image.lines.GENDSM_REMOVE_TAGS)
             logger.log(level, "{} {:#018x} {}", mark, current_address, disassembly)
             current_address += instruction_size
@@ -169,17 +168,21 @@ class Emulator:
     def stack_trace(self, *, level: int | str = "INFO") -> None:
         logger.error("Stack trace:")
 
-        current_stack_address = self.register.get("rsp") - self.memory.pointer_size
-        address = self.register.get("rip")
-        current_address = address
-        image = self.__get_image(current_address)
+        current_stack_address = self.register.rsp - self.memory.pointer_size
+        current_address = self.register.rip
 
         while True:
+            try:
+                image = self.__get_image(current_address)
+
+            except ValueError:
+                break
+
             function: func_t | None = image.funcs.get_func(current_address)
             if function is None:
                 break
 
-            mark = ">" if current_address == address else " "
+            mark = ">" if current_address == self.register.rip else " "
             function_name: str = image.funcs.get_func_name(function.start_ea)
             entry = self.__format_stack_trace_entry(image.path.stem, function_name, function.start_ea, current_address)
             logger.log(level, "{} {:#018x} {}", mark, current_address, entry)
@@ -187,15 +190,9 @@ class Emulator:
             current_stack_address += image.frame.get_frame_size(function)
             current_address = self.memory.read_pointer(current_stack_address)
 
-            try:
-                image = self.__get_image(current_address)
-
-            except ValueError:
-                break
-
     def start(self, address: int) -> None:
         stack = self.memory.allocate(self.stack_size * 2, Permission.READ_WRITE)
-        self.register.set("rsp", stack + self.stack_size)
+        self.register.rsp = stack + self.stack_size
 
         self.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, self.memory.page_size, Permission.READ)
         self.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, self.__kuser_shared_data)
@@ -252,7 +249,7 @@ class Emulator:
 
         with suppress(ValueError):
             address = self.get_export(*target)
-            self.register.set("rip", address)
+            self.register.rip = address
             return
 
         if target in self.__import_fallbacks:
@@ -267,10 +264,9 @@ class Emulator:
         value = callback(self)
         match value:
             case int(value):
-                self.register.set("rax", value)
-                rsp = self.register.get("rsp")
-                self.register.set("rsp", rsp + self.memory.pointer_size)
-                self.register.set("rip", self.memory.read_pointer(rsp))
+                self.register.rax = value
+                self.register.rip = self.memory.read_pointer(self.register.rsp)
+                self.register.rsp = self.register.rsp + self.memory.pointer_size
 
             case None:
                 self.uc.emu_stop()
