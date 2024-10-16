@@ -2,52 +2,33 @@ from typing import Self, final
 
 from driver_hacker.emulator.emulator import Emulator
 from driver_hacker.emulator.emulator_callback import EmulatorCallback
+from driver_hacker.emulator.emulator_factory import EmulatorFactory
 from driver_hacker.image.image import Image
 
 
 @final
 class EmulatorBuilder:
-    __stack_size: int
-    __memory_start: int
-    __memory_end: int
-    __kuser_shared_data: bytes
+    __kuser_shared_data: bytes | None
 
-    __images: list[Image]
+    __images: set[Image]
     __import_fallbacks: dict[tuple[str, str | int], EmulatorCallback]
     __default_import_fallback: EmulatorCallback | None
     __function_callbacks: dict[tuple[str, str | int], EmulatorCallback]
 
-    DEFAULT_STACK_SIZE = 0x2000
-    DEFAULT_MEMORY_START = 0xFFFF000000000000
-    DEFAULT_MEMORY_END = 0xFFFFFFFFFFFFFFFF
-    DEFUALT_KUSER_SHARED_DATA = bytes(0x1000)
-
     def __init__(self) -> None:
-        self.__stack_size = self.DEFAULT_STACK_SIZE
-        self.__memory_start = self.DEFAULT_MEMORY_START
-        self.__memory_end = self.DEFAULT_MEMORY_END
-        self.__kuser_shared_data = self.DEFUALT_KUSER_SHARED_DATA
+        self.__kuser_shared_data = None
 
-        self.__images = []
+        self.__images = set()
         self.__import_fallbacks = {}
         self.__default_import_fallback = None
         self.__function_callbacks = {}
-
-    def set_stack_size(self, size: int) -> Self:
-        self.__stack_size = size
-        return self
-
-    def set_memory_range(self, start: int, end: int) -> Self:
-        self.__memory_start = start
-        self.__memory_end = end
-        return self
 
     def set_kuser_shared_data(self, kuser_shared_data: bytes) -> Self:
         self.__kuser_shared_data = kuser_shared_data
         return self
 
     def add_image(self, image: Image) -> Self:
-        self.__images.append(image)
+        self.__images.add(image)
         return self
 
     def add_import_fallback(self, image_name: str, identifier: str | int, import_fallback: EmulatorCallback) -> Self:
@@ -68,12 +49,9 @@ class EmulatorBuilder:
         return self
 
     def build(self) -> Emulator:
-        return Emulator(
-            self.__stack_size,
-            self.__memory_start,
-            self.__memory_end,
+        return EmulatorFactory().create(
+            self.__images,
             self.__kuser_shared_data,
-            {image.stem: image for image in self.__images},
             self.__import_fallbacks,
             self.__default_import_fallback,
             self.__function_callbacks,

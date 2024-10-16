@@ -14,44 +14,70 @@ from driver_hacker.emulator.memory_manager.permission import Permission
 class MemoryManager:
     __uc: unicorn.Uc
 
-    def __init__(self, uc: unicorn.Uc, start: int, end: int) -> None:
+    __START_ADDRESS_ZERO_COUNT = 47
+
+    def __init__(self, uc: unicorn.Uc) -> None:
         self.__uc = uc
-        self.__start = start
-        self.__end = end
+
+    @property
+    def start(self) -> int:
+        one_count = 1
+
+        while (start := (1 << one_count - 1) << self.__START_ADDRESS_ZERO_COUNT).bit_length() < self.pointer_size * 8:
+            one_count += 1
+
+        return start
+
+    @property
+    def end(self) -> int:
+        return (1 << (self.pointer_size * 8)) - 1
 
     @property
     def page_size(self) -> int:
-        return 0x1000
+        page_size: int = self.__uc.ctl_get_page_size()
+        return page_size
 
     @property
     def pointer_size(self) -> int:
-        return 8
+        if (architecture := self.__uc.ctl_get_arch()) != unicorn.UC_ARCH_X86:
+            message = f"Unsupported architecture `{architecture}`"
+            raise NotImplementedError(message)
+
+        mode: int = self.__uc.ctl_get_mode()
+
+        if mode & unicorn.UC_MODE_64:
+            return 8
+
+        if mode & unicorn.UC_MODE_32:
+            return 4
+
+        if mode & unicorn.UC_MODE_16:
+            return 2
+
+        message = f"Failed to process mode {mode:#x}"
+        raise RuntimeError(message)
 
     @property
     def endian(self) -> Literal["big", "little"]:
-        return "little"
+        return "big" if self.__uc.ctl_get_mode() & unicorn.UC_MODE_BIG_ENDIAN else "little"
 
     @property
     def free_blocks(self) -> Generator[FreeBlock]:
-        current = self.__start
+        current = self.start
         for block in self.allocated_blocks:
             if block.start > current:
                 yield FreeBlock(current, block.start)
 
             current = max(current, block.end)
 
-        if current < self.__end:
-            yield FreeBlock(current, self.__end)
+        if current < self.end:
+            yield FreeBlock(current, self.end)
 
     @property
     def allocated_blocks(self) -> Generator[AllocatedBlock]:
         for first, last, permissions in self.__uc.mem_regions():
-            if self.__start <= first < self.__end or self.__start <= last < self.__end:
-                yield AllocatedBlock(
-                    max(first, self.__start),
-                    min(last + 1, self.__end),
-                    Permission.from_uc(permissions),
-                )
+            if self.start <= first < self.end or self.start <= last < self.end:
+                yield AllocatedBlock(max(first, self.start), min(last + 1, self.end), Permission.from_uc(permissions))
 
     def map(self, start: int, size: int, permissions: Permission = Permission.ALL) -> None:
         logger.trace("map(start={:#x}, size={:#x}, permissions={})", start, size, permissions)
@@ -163,10 +189,10 @@ class MemoryManager:
         aligned_size = self.__align_up(size + start - aligned_start)
         aligned_end = aligned_start + aligned_size
         if (
-            aligned_start < self.__start
-            or aligned_start >= self.__end
-            or aligned_end < self.__start
-            or aligned_end >= self.__end
+            aligned_start < self.start
+            or aligned_start >= self.end
+            or aligned_end < self.start
+            or aligned_end >= self.end
         ):
             message = f"Invalid start {start:#x} or size {size:#x}"
             raise RuntimeError(message)
