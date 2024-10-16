@@ -33,32 +33,34 @@ class EmulatorFactory:
         default_import_fallback: EmulatorCallback | None,
         function_callbacks: Mapping[tuple[str, str | int], EmulatorCallback],
     ) -> Emulator:
-        _uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
-        _image_manager = ImageManager(images)
-        _register_manager = RegisterManager(_uc)
-        _memory_manager = MemoryManager(_uc)
-        emulator = Emulator(_uc, _image_manager, _register_manager, _memory_manager)
+        emulator = self.__create_empty(images)
 
         if kuser_shared_data is not None:
-            emulator.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, emulator.memory.page_size, Permission.READ)
-            emulator.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, kuser_shared_data)
+            self.__setup_kuser_shared_data(emulator, kuser_shared_data)
 
-        for image in images:
-            self.__map_image_sections(emulator, image)
-
-        for image in images:
-            self.__resolve_image_imports(emulator, image, import_fallbacks, default_import_fallback)
-
-        for (image_name, function_identifier), callback in function_callbacks.items():
-            self.__add_callback(emulator, emulator.image.get(image_name), function_identifier, callback)
-
-        stack_size = self.__STACK_PAGE_COUNT * emulator.memory.page_size
-        stack = emulator.memory.allocate(stack_size, Permission.READ_WRITE)
-        emulator.register.rsp = stack + stack_size // 2
+        self.__map_images(emulator, images)
+        self.__resolve_imports(emulator, images, import_fallbacks, default_import_fallback)
+        self.__add_callbacks(emulator, function_callbacks)
+        self.__setup_stack(emulator)
 
         return emulator
 
-    def __map_image_sections(self, emulator: Emulator, image: Image) -> None:
+    def __create_empty(self, images: AbstractSet[Image]) -> Emulator:
+        uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
+        image_manager = ImageManager(images)
+        register_manager = RegisterManager(uc)
+        memory_manager = MemoryManager(uc)
+        return Emulator(uc, image_manager, register_manager, memory_manager)
+
+    def __setup_kuser_shared_data(self, emulator: Emulator, kuser_shared_data: bytes) -> None:
+        emulator.memory.map(self.__KUSER_SHARED_DATA_ADDRESS, emulator.memory.page_size, Permission.READ)
+        emulator.memory.write(self.__KUSER_SHARED_DATA_ADDRESS, kuser_shared_data)
+
+    def __map_images(self, emulator: Emulator, images: AbstractSet[Image]) -> None:
+        for image in images:
+            self.__map_image(emulator, image)
+
+    def __map_image(self, emulator: Emulator, image: Image) -> None:
         image_start: int = image.nalt.get_imagebase()
         image_end: int = max(image.segment.getnseg(index).end_ea for index in range(image.segment.get_segm_qty()))
         image_size = image_end - image_start
@@ -77,6 +79,16 @@ class EmulatorFactory:
             emulator.memory.write(segment.start_ea, data)
 
             segment = image.segment.get_next_seg(segment.start_ea)
+
+    def __resolve_imports(
+        self,
+        emulator: Emulator,
+        images: AbstractSet[Image],
+        import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback],
+        default_import_fallback: EmulatorCallback | None,
+    ) -> None:
+        for image in images:
+            self.__resolve_image_imports(emulator, image, import_fallbacks, default_import_fallback)
 
     def __resolve_image_imports(
         self,
@@ -150,6 +162,14 @@ class EmulatorFactory:
         )
         return True
 
+    def __add_callbacks(
+        self,
+        emulator: Emulator,
+        function_callbacks: Mapping[tuple[str, str | int], EmulatorCallback],
+    ) -> None:
+        for (image_name, function_identifier), callback in function_callbacks.items():
+            self.__add_callback(emulator, emulator.image.get(image_name), function_identifier, callback)
+
     def __add_callback(
         self,
         emulator: Emulator,
@@ -164,6 +184,11 @@ class EmulatorFactory:
             begin=address,
             end=address + 1,
         )
+
+    def __setup_stack(self, emulator: Emulator) -> None:
+        stack_size = self.__STACK_PAGE_COUNT * emulator.memory.page_size
+        stack = emulator.memory.allocate(stack_size, Permission.READ_WRITE)
+        emulator.register.rsp = stack + stack_size // 2
 
     @staticmethod
     def __run_callback(emulator: Emulator, callback: EmulatorCallback) -> None:
