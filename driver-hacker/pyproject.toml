@@ -2,4 +2,4 @@
 name = "driver-hacker"
 version = "0.1.0"
 authors = [{ name = "Omer Lubin", email = "omer.lubin.1337@gmail.com" }]
-dependencies = ["loguru~=0.7.2", "rpyc~=6.0.0"]
+dependencies = ["loguru~=0.7.2", "rpyc~=6.0.0", "unicorn~=2.1.1"]

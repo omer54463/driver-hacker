@@ -4,7 +4,7 @@ from contextlib import suppress
 from functools import partial
 from typing import TYPE_CHECKING, assert_never, final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 from loguru import logger
 
 from driver_hacker.emulator.emulator import Emulator

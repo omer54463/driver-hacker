@@ -5,7 +5,7 @@ from re import Pattern, compile
 from sys import stderr
 from typing import TYPE_CHECKING, final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 from loguru import logger
 
 from driver_hacker import native

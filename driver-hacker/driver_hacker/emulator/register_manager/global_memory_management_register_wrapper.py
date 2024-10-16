@@ -1,6 +1,6 @@
 from typing import final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 
 
 @final

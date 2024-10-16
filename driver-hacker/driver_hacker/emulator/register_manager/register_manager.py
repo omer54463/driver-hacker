@@ -1,6 +1,6 @@
 from typing import final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 
 from driver_hacker.emulator.register_manager.floating_point_register_wrapper import FloatingPointRegisterWrapper
 from driver_hacker.emulator.register_manager.global_memory_management_register_wrapper import (

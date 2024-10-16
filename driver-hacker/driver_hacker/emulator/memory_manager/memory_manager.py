@@ -2,7 +2,7 @@ from collections.abc import Generator
 from math import ceil, floor
 from typing import Literal, final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 from loguru import logger
 
 from driver_hacker.emulator.memory_manager.allocated_blocks import AllocatedBlock

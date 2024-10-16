@@ -1,7 +1,7 @@
 from math import ceil
 from typing import TYPE_CHECKING, assert_never, final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 from loguru import logger
 
 from driver_hacker.emulator.image_manager.image_manager import ImageManager

@@ -1,7 +1,7 @@
 from enum import Flag, auto
 from typing import Self, final
 
-import unicorn  # type: ignore[import-untyped]
+import unicorn
 
 
 @final
