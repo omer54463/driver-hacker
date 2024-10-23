@@ -44,7 +44,7 @@ class EmulatorFactory:
         cls.__add_callbacks(emulator, function_callbacks)
 
         cls.__setup_stack(emulator)
-        cls.__setup_gdt(emulator)
+        cls.__setup_segmentation(emulator)
 
         return emulator
 
@@ -204,7 +204,7 @@ class EmulatorFactory:
         emulator.register.rsp = stack + stack_size // 2
 
     @staticmethod
-    def __setup_gdt(emulator: Emulator) -> None:
+    def __setup_segmentation(emulator: Emulator) -> None:
         pass
 
     @staticmethod

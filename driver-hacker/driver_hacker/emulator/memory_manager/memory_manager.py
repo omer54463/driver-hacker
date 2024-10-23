@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from math import ceil, floor
+from types import MappingProxyType
 from typing import Literal, final
 
 import unicorn
@@ -14,19 +15,18 @@ from driver_hacker.emulator.memory_manager.permission import Permission
 class MemoryManager:
     __uc: unicorn.Uc
 
-    __START_ADDRESS_ZERO_COUNT = 47
+    __START_ADDRESSES = MappingProxyType({8: 0xFFFF080000000000})
 
     def __init__(self, uc: unicorn.Uc) -> None:
         self.__uc = uc
 
     @property
     def start(self) -> int:
-        one_count = 1
+        if self.pointer_size not in self.__START_ADDRESSES:
+            message = f"Unknown start address for pointer size {self.pointer_size:#x}"
+            raise NotImplementedError(message)
 
-        while (start := ((1 << one_count) - 1) << self.__START_ADDRESS_ZERO_COUNT).bit_length() < self.pointer_size * 8:
-            one_count += 1
-
-        return start
+        return self.__START_ADDRESSES[self.pointer_size]
 
     @property
     def end(self) -> int:
