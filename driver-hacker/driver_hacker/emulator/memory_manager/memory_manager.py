@@ -23,7 +23,7 @@ class MemoryManager:
     def start(self) -> int:
         one_count = 1
 
-        while (start := (1 << one_count - 1) << self.__START_ADDRESS_ZERO_COUNT).bit_length() < self.pointer_size * 8:
+        while (start := ((1 << one_count) - 1) << self.__START_ADDRESS_ZERO_COUNT).bit_length() < self.pointer_size * 8:
             one_count += 1
 
         return start
