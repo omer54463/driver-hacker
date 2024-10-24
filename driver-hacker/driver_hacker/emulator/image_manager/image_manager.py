@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from collections.abc import Set as AbstractSet
 from typing import assert_never, final
 
@@ -10,6 +11,9 @@ class ImageManager:
 
     def __init__(self, images: AbstractSet[Image]) -> None:
         self.__images = {image.stem: image for image in images}
+
+    def __iter__(self) -> Iterator[Image]:
+        return iter(self.__images.values())
 
     def get(self, image_name: str) -> Image:
         try:

@@ -28,19 +28,24 @@ class EmulatorFactory:
     @classmethod
     def create(
         cls,
-        images: AbstractSet[Image],
-        kuser_shared_data: bytes | None,
-        import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback],
-        default_import_fallback: EmulatorCallback | None,
-        function_callbacks: Mapping[tuple[str, str | int], EmulatorCallback],
+        images: AbstractSet[Image] | None = None,
+        kuser_shared_data: bytes | None = None,
+        import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback] | None = None,
+        default_import_fallback: EmulatorCallback | None = None,
+        function_callbacks: Mapping[tuple[str, str | int], EmulatorCallback] | None = None,
     ) -> Emulator:
+        images = set() if images is None else images
         emulator = cls.__create_empty(images)
 
         if kuser_shared_data is not None:
             cls.__setup_kuser_shared_data(emulator, kuser_shared_data)
 
-        cls.__map_images(emulator, images)
-        cls.__resolve_imports(emulator, images, import_fallbacks, default_import_fallback)
+        cls.__map_images(emulator)
+
+        import_fallbacks = {} if import_fallbacks is None else import_fallbacks
+        cls.__resolve_imports(emulator, import_fallbacks, default_import_fallback)
+
+        function_callbacks = {} if function_callbacks is None else function_callbacks
         cls.__add_callbacks(emulator, function_callbacks)
 
         cls.__setup_stack(emulator)
@@ -51,6 +56,8 @@ class EmulatorFactory:
     @staticmethod
     def __create_empty(images: AbstractSet[Image]) -> Emulator:
         uc = unicorn.Uc(unicorn.UC_ARCH_X86, unicorn.UC_MODE_64)
+        uc.ctl_tlb_mode(unicorn.UC_TLB_VIRTUAL)
+
         image_manager = ImageManager(images)
         register_manager = RegisterManager(uc)
         memory_manager = MemoryManager(uc)
@@ -62,8 +69,8 @@ class EmulatorFactory:
         emulator.memory.write(cls.__KUSER_SHARED_DATA_ADDRESS, kuser_shared_data)
 
     @classmethod
-    def __map_images(cls, emulator: Emulator, images: AbstractSet[Image]) -> None:
-        for image in images:
+    def __map_images(cls, emulator: Emulator) -> None:
+        for image in emulator.image:
             cls.__map_image(emulator, image)
 
     @staticmethod
@@ -91,11 +98,10 @@ class EmulatorFactory:
     def __resolve_imports(
         cls,
         emulator: Emulator,
-        images: AbstractSet[Image],
         import_fallbacks: Mapping[tuple[str, str | int], EmulatorCallback],
         default_import_fallback: EmulatorCallback | None,
     ) -> None:
-        for image in images:
+        for image in emulator.image:
             cls.__resolve_image_imports(emulator, image, import_fallbacks, default_import_fallback)
 
     @classmethod

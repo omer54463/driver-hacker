@@ -15,7 +15,7 @@ from driver_hacker.emulator.memory_manager.permission import Permission
 class MemoryManager:
     __uc: unicorn.Uc
 
-    __START_ADDRESSES = MappingProxyType({8: 0xFFFF080000000000})
+    __START_ADDRESSES = MappingProxyType({8: 0xFFFF800000000000})
 
     def __init__(self, uc: unicorn.Uc) -> None:
         self.__uc = uc
