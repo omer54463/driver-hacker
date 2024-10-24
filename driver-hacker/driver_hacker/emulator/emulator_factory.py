@@ -49,7 +49,7 @@ class EmulatorFactory:
         cls.__add_callbacks(emulator, function_callbacks)
 
         cls.__setup_stack(emulator)
-        cls.__setup_segmentation(emulator)
+        cls.__setup_gs(emulator)
 
         return emulator
 
@@ -210,8 +210,17 @@ class EmulatorFactory:
         emulator.register.rsp = stack + stack_size // 2
 
     @staticmethod
-    def __setup_segmentation(emulator: Emulator) -> None:
-        pass
+    def __setup_gs(emulator: Emulator) -> None:
+        kthread_size = emulator.memory.page_size * 0x10
+        kthread_address = emulator.memory.allocate(kthread_size)
+
+        kpcr_size = emulator.memory.page_size * 0x10
+        kpcr_address = emulator.memory.allocate(kpcr_size)
+        kprcb_address = kpcr_address + 0x180
+        emulator.memory.write_pointer(kpcr_address + 0x20, kprcb_address)
+        emulator.memory.write_pointer(kprcb_address + 0x8, kthread_address)
+
+        emulator.register.gs_base = kpcr_address
 
     @staticmethod
     def __run_callback(emulator: Emulator, callback: EmulatorCallback) -> None:
