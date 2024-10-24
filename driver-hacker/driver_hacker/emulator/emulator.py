@@ -121,8 +121,14 @@ class Emulator:
 
         return address
 
-    def start(self, address: int) -> None:
-        self.uc.emu_start(address, 0)
+    def start(self, address: int, *, single_step: bool = False) -> None:
+        if single_step:
+            while True:
+                self.uc.emu_start(address, 0, count=1)
+                address = self.register.rip
+
+        else:
+            self.uc.emu_start(address, 0)
 
     @staticmethod
     def __format_stack_trace_entry(
