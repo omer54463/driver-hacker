@@ -78,7 +78,7 @@ def get_drivers() -> Mapping[str, Path]:
     system_root = __get_system_root()
 
     return {
-        path.stem: path
+        path.stem.lower(): path
         for system_module_information in __parse_system_module_information_buffer(buffer)
         if (path := __decode_full_path_name(system_root, system_module_information.full_path_name)) is not None
     }

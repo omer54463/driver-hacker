@@ -148,6 +148,8 @@ def main() -> None:
     image_cache = ImageCache(arguments.cache)
     with image_cache.get(drivers["ntoskrnl"]) as ntoskrnl:
         for driver_name, driver_path in drivers.items():
-            if driver_name != "ntoskrnl" and arguments.pattern.match(driver_name):
-                with image_cache.get(driver_path) as driver:
-                    __analyze(kuser_shared_data, ntoskrnl, driver)
+            if driver_name == "ntoskrnl" or not arguments.pattern.match(driver_name):
+                continue
+
+            with image_cache.get(driver_path) as driver:
+                __analyze(kuser_shared_data, ntoskrnl, driver)
