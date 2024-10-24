@@ -128,7 +128,8 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
     emulator.register.rcx = driver_object
 
     try:
-        emulator.start(emulator.resolve(driver.stem, "DriverEntry"))
+        driver_entry = emulator.resolve(driver.stem, "DriverEntry")
+        emulator.start(driver_entry, single_step=True)
 
     except unicorn.UcError as uc_error:
         logger.error("Unicorn error: {}", uc_error)
