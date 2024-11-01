@@ -127,6 +127,15 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
     driver_object = emulator.memory.allocate(emulator.memory.page_size, Permission.READ_WRITE)
     emulator.register.rcx = driver_object
 
+    kthread_size = emulator.memory.page_size * 0x10
+    kthread_address = emulator.memory.allocate(kthread_size)
+    kpcr_size = emulator.memory.page_size * 0x10
+    kpcr_address = emulator.memory.allocate(kpcr_size)
+    kprcb_address = kpcr_address + 0x180
+    emulator.memory.write_pointer(kpcr_address + 0x20, kprcb_address)
+    emulator.memory.write_pointer(kprcb_address + 0x8, kthread_address)
+    emulator.register.gs_base = kpcr_address
+
     try:
         driver_entry = emulator.resolve(driver.stem, "DriverEntry")
         emulator.start(driver_entry, single_step=True)
