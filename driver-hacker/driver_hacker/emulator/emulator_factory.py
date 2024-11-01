@@ -14,6 +14,7 @@ from driver_hacker.emulator.image_manager.image_manager import ImageManager
 from driver_hacker.emulator.memory_manager.memory_manager import MemoryManager
 from driver_hacker.emulator.memory_manager.permission import Permission
 from driver_hacker.emulator.register_manager.register_manager import RegisterManager
+from driver_hacker.emulator.struct_manager.struct_manager import StructManager
 from driver_hacker.image.image import Image
 
 if TYPE_CHECKING:
@@ -58,9 +59,10 @@ class EmulatorFactory:
         uc.ctl_tlb_mode(unicorn.UC_TLB_VIRTUAL)
 
         image_manager = ImageManager(images)
+        struct_manager = StructManager(image_manager)
         register_manager = RegisterManager(uc)
         memory_manager = MemoryManager(uc)
-        return Emulator(uc, image_manager, register_manager, memory_manager)
+        return Emulator(uc, image_manager, struct_manager, register_manager, memory_manager)
 
     @classmethod
     def __setup_kuser_shared_data(cls, emulator: Emulator, kuser_shared_data: bytes) -> None:

@@ -7,6 +7,7 @@ from loguru import logger
 from driver_hacker.emulator.image_manager.image_manager import ImageManager
 from driver_hacker.emulator.memory_manager.memory_manager import MemoryManager
 from driver_hacker.emulator.register_manager.register_manager import RegisterManager
+from driver_hacker.emulator.struct_manager.struct_manager import StructManager
 
 if TYPE_CHECKING:
     from ida_funcs import func_t  # type: ignore[import-not-found]
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 class Emulator:
     __uc: unicorn.Uc
     __image_manager: ImageManager
+    __struct_manager: StructManager
     __register_manager: RegisterManager
     __memory_manager: MemoryManager
 
@@ -25,11 +27,13 @@ class Emulator:
         self,
         uc: unicorn.Uc,
         image_manager: ImageManager,
+        struct_manager: StructManager,
         register_manager: RegisterManager,
         memory_manager: MemoryManager,
     ) -> None:
         self.__uc = uc
         self.__image_manager = image_manager
+        self.__struct_manager = struct_manager
         self.__register_manager = register_manager
         self.__memory_manager = memory_manager
 
@@ -40,6 +44,10 @@ class Emulator:
     @property
     def image(self) -> ImageManager:
         return self.__image_manager
+
+    @property
+    def struct(self) -> StructManager:
+        return self.__struct_manager
 
     @property
     def register(self) -> RegisterManager:
