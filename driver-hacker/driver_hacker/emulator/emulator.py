@@ -1,3 +1,4 @@
+import builtins
 from math import ceil
 from typing import TYPE_CHECKING, assert_never, final
 
@@ -16,52 +17,52 @@ if TYPE_CHECKING:
 @final
 class Emulator:
     __uc: unicorn.Uc
-    __image_manager: ImageManager
-    __struct_manager: StructManager
-    __register_manager: RegisterManager
-    __memory_manager: MemoryManager
+    __img: ImageManager
+    __str: StructManager
+    __reg: RegisterManager
+    __mem: MemoryManager
 
     __DISASSEMBLY_SIZE = 7
 
     def __init__(
         self,
         uc: unicorn.Uc,
-        image_manager: ImageManager,
-        struct_manager: StructManager,
-        register_manager: RegisterManager,
-        memory_manager: MemoryManager,
+        img: ImageManager,
+        str: StructManager,
+        reg: RegisterManager,
+        mem: MemoryManager,
     ) -> None:
         self.__uc = uc
-        self.__image_manager = image_manager
-        self.__struct_manager = struct_manager
-        self.__register_manager = register_manager
-        self.__memory_manager = memory_manager
+        self.__img = img
+        self.__str = str
+        self.__reg = reg
+        self.__mem = mem
 
     @property
     def uc(self) -> unicorn.Uc:
         return self.__uc
 
     @property
-    def image(self) -> ImageManager:
-        return self.__image_manager
+    def img(self) -> ImageManager:
+        return self.__img
 
     @property
-    def struct(self) -> StructManager:
-        return self.__struct_manager
+    def str(self) -> StructManager:
+        return self.__str
 
     @property
-    def register(self) -> RegisterManager:
-        return self.__register_manager
+    def reg(self) -> RegisterManager:
+        return self.__reg
 
     @property
-    def memory(self) -> MemoryManager:
-        return self.__memory_manager
+    def mem(self) -> MemoryManager:
+        return self.__mem
 
-    def disassembly(self, *, level: int | str = "TRACE") -> None:
+    def disassembly(self, *, level: int | builtins.str = "TRACE") -> None:
         logger.log(level, "Disassembly:")
 
-        current_address = self.register.rip
-        image = self.image.get_at(current_address)
+        current_address = self.reg.rip
+        image = self.img.get_at(current_address)
 
         for _ in range(ceil(self.__DISASSEMBLY_SIZE / 2) - 1):
             previous_address: int = image.ua.decode_prev_insn(image.ua.insn_t(), current_address)
@@ -75,20 +76,20 @@ class Emulator:
             if instruction_size == 0:
                 break
 
-            mark = ">" if current_address == self.register.rip else " "
+            mark = ">" if current_address == self.reg.rip else " "
             disassembly = image.lines.generate_disasm_line(current_address, image.lines.GENDSM_REMOVE_TAGS)
             logger.log(level, "{} {:#018x} {}", mark, current_address, disassembly)
             current_address += instruction_size
 
-    def stack_trace(self, *, level: int | str = "TRACE") -> None:
+    def stack_trace(self, *, level: int | builtins.str = "TRACE") -> None:
         logger.log(level, "Stack trace:")
 
-        current_stack_address = self.register.rsp - self.memory.pointer_size
-        current_address = self.register.rip
+        current_stack_address = self.reg.rsp - self.mem.pointer_size
+        current_address = self.reg.rip
 
         while current_address != 0:
             try:
-                image = self.image.get_at(current_address)
+                image = self.img.get_at(current_address)
             except ValueError:
                 break
 
@@ -96,16 +97,16 @@ class Emulator:
             if function is None:
                 break
 
-            mark = ">" if current_address == self.register.rip else " "
+            mark = ">" if current_address == self.reg.rip else " "
             function_name: str = image.funcs.get_func_name(function.start_ea)
             entry = self.__format_stack_trace_entry(image.stem, function_name, function.start_ea, current_address)
             logger.log(level, "{} {:#018x} {}", mark, current_address, entry)
 
             current_stack_address += image.frame.get_frame_size(function)
-            current_address = self.memory.read_pointer(current_stack_address)
+            current_address = self.mem.read_pointer(current_stack_address)
 
-    def resolve(self, image_name: str, symbol_identifier: str | int) -> int:
-        image = self.image.get(image_name)
+    def resolve(self, image_name: builtins.str, symbol_identifier: builtins.str | int) -> int:
+        image = self.img.get(image_name)
 
         match symbol_identifier:
             case str() as symbol_name:
@@ -133,18 +134,18 @@ class Emulator:
         if single_step:
             while True:
                 self.uc.emu_start(address, 0, count=1)
-                address = self.register.rip
+                address = self.reg.rip
 
         else:
             self.uc.emu_start(address, 0)
 
     @staticmethod
     def __format_stack_trace_entry(
-        image_name: str,
-        function_name: str,
+        image_name: builtins.str,
+        function_name: builtins.str,
         function_start_address: int,
         address: int,
-    ) -> str:
+    ) -> builtins.str:
         distance = address - function_start_address
 
         if distance < 0:
