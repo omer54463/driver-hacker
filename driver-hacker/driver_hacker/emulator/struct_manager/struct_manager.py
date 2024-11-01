@@ -13,36 +13,42 @@ class StructManager:
     def __init__(self, img: ImageManager) -> None:
         self.__img = img
 
-    def size(self, image_name: str, struct_name: str) -> int:
-        type_info = self.__get_type_info(image_name, struct_name)
-
-        if not type_info.is_struct():
-            message = f"Type `{struct_name}` is not a struct"
-            raise ValueError(message)
-
-        size: int = type_info.get_size()
+    def size(self, value: str) -> int:
+        _, member_info = self.__resolve_value(value)
+        size: int = member_info.size // 8
         return size
 
-    def offset(self, image_name: str, struct_name: str, member_name: str) -> int:
-        type_info = self.__get_type_info(image_name, struct_name)
+    def offset(self, value: str) -> int:
+        offset, _ = self.__resolve_value(value)
+        return offset
 
+    def __resolve_value(self, value: str) -> tuple[int, "udm_t"]:
+        image_name, value = value.split("!")
+        struct_name, *member_names = value.split(".")
+
+        type_info = self.__get_type_info(image_name, struct_name)
         if not type_info.is_struct():
             message = f"Type `{struct_name}` is not a struct"
             raise ValueError(message)
 
-        return self.__get_member_offset(image_name, type_info, member_name)
+        offset = 0
+        for member_name in member_names:
+            member_info = self.__get_member_info(image_name, type_info, member_name)
+            offset += member_info.offset // 8
+            type_info = member_info.type
 
-    def __get_member_offset(self, image_name: str, type_info: "tinfo_t", member_name: str) -> int:
+        return offset, member_info
+
+    def __get_member_info(self, image_name: str, type_info: "tinfo_t", member_name: str) -> "udm_t":
         image = self.__img.get(image_name)
 
-        member: udm_t = image.typeinf.udm_t()
-        member.name = member_name
-        if type_info.find_udm(member, image.typeinf.STRMEM_NAME) == image.api.BADADDR:
+        member_info: udm_t = image.typeinf.udm_t()
+        member_info.name = member_name
+        if type_info.find_udm(member_info, image.typeinf.STRMEM_NAME) == image.api.BADADDR:
             message = f"Failed to find member `{member_name}`"
             raise ValueError(message)
 
-        offset: int = member.offset // 8
-        return offset
+        return member_info
 
     def __get_type_info(self, image_name: str, type_name: str) -> "tinfo_t":
         image = self.__img.get(image_name)
