@@ -14,27 +14,24 @@ class StructManager:
         self.__img = img
 
     def size(self, value: str) -> int:
-        type_info, _ = self.__resolve_value(value)
-        member_size: int = type_info.get_size()
-        return member_size
+        image_name, struct_name = value.split("!")
+        type_info = self.__get_type_info(image_name, struct_name)
+        size: int = type_info.get_size()
+        return size
 
     def offset(self, value: str) -> int:
-        _, offset = self.__resolve_value(value)
-        return offset
-
-    def __resolve_value(self, value: str) -> tuple["tinfo_t", int]:
         image_name, value = value.split("!")
         struct_name, *member_names = value.split(".")
 
-        type_info = self.__get_type_info(image_name, struct_name)
         member_info = None
+        type_info = self.__get_type_info(image_name, struct_name)
         offset = 0
         for member_name in member_names:
             member_info = self.__get_member_info(image_name, type_info, member_name)
             type_info = member_info.type
             offset += member_info.offset // 8
 
-        return type_info, offset
+        return offset
 
     def __get_member_info(self, image_name: str, type_info: "tinfo_t", member_name: str) -> "udm_t":
         image = self.__img.get(image_name)
