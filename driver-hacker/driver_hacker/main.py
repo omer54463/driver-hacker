@@ -72,16 +72,6 @@ def __setup_logger(*, verbose: bool = False) -> None:
     logger.add(stderr, level="TRACE" if verbose else "INFO", format=__format_function)
 
 
-def __return_zero(e: Emulator) -> EmulatorCallbackResult:
-    e.reg.rax = 0
-    return EmulatorCallbackResult.RETURN
-
-
-def __allocate(e: Emulator) -> EmulatorCallbackResult:
-    e.reg.rax = e.mem.allocate(e.reg.rdx, Permission.READ_WRITE)
-    return EmulatorCallbackResult.RETURN
-
-
 def __io_create_device(e: Emulator) -> EmulatorCallbackResult:
     device_name_address = e.reg.r8
     device_name_buffer = e.mem.read_pointer(device_name_address + 8)
@@ -114,11 +104,6 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
         .set_kuser_shared_data(kuser_shared_data)
         .add_image(ntoskrnl)
         .add_image(driver)
-        .add_function_callback("ntoskrnl", "EtwRegister", __return_zero)
-        .add_function_callback("ntoskrnl", "ExInitializeResourceLite", __return_zero)
-        .add_function_callback("ntoskrnl", "IoRegisterShutdownNotification", __return_zero)
-        .add_function_callback("ntoskrnl", "ExAllocatePoolWithTag", __allocate)
-        .add_function_callback("ntoskrnl", "ExAllocatePool2", __allocate)
         .add_function_callback("ntoskrnl", "IoCreateDevice", __io_create_device)
         .add_function_callback("ntoskrnl", "IoCreateSymbolicLink", __io_create_symbolic_link)
         .build()
@@ -126,6 +111,15 @@ def __analyze(kuser_shared_data: bytes, ntoskrnl: Image, driver: Image) -> None:
 
     driver_object = e.mem.allocate(e.mem.page_size, Permission.READ_WRITE)
     e.reg.rcx = driver_object
+
+    kpcr = e.mem.allocate(e.str.size("ntoskrnl!_KPCR"), Permission.READ_WRITE)
+    e.mem.write_pointer(
+        kpcr + e.str.offset("ntoskrnl!_KPCR.___u0.__s1.CurrentPrcb"),
+        kpcr + e.str.offset("ntoskrnl!_KPCR.Prcb"),
+    )
+    kthread = e.mem.allocate(e.str.size("ntoskrnl!_KTHREAD"), Permission.READ_WRITE)
+    e.mem.write_pointer(kpcr + e.str.offset("ntoskrnl!_KPCR.Prcb.CurrentThread"), kthread)
+    e.reg.gs_base = kpcr
 
     try:
         driver_entry = e.resolve(driver.stem, "DriverEntry")
